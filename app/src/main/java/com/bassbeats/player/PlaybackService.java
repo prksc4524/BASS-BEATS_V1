@@ -26,6 +26,8 @@ public class PlaybackService extends Service {
     public static final String EQ_BAND = "com.bassbeats.player.EQ_BAND";
     public static final String EQ_BASS = "com.bassbeats.player.EQ_BASS";
     public static final String STATE = "com.bassbeats.player.STATE";
+    public static final String GET_STATE = "com.bassbeats.player.GET_STATE";
+    public static final String SEEK = "com.bassbeats.player.SEEK";
     public static final String SKIP_NEXT = "com.bassbeats.player.SKIP_NEXT";
     public static final String SKIP_PREV = "com.bassbeats.player.SKIP_PREV";
 
@@ -74,6 +76,8 @@ public class PlaybackService extends Service {
         String action = intent.getAction();
         if (PLAY.equals(action)) startTrack(intent);
         else if (TOGGLE.equals(action)) togglePlayback();
+        else if (GET_STATE.equals(action)) broadcastState(player != null && player.isPlaying());
+        else if (SEEK.equals(action)) { if (player != null) try { player.seekTo((int)Math.max(0, Math.min(Integer.MAX_VALUE, intent.getLongExtra("position", 0)))); broadcastState(player.isPlaying()); } catch (IllegalStateException ignored) {} }
         else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT));
         else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV));
         else if (EQ_BAND.equals(action)) {
@@ -223,7 +227,7 @@ public class PlaybackService extends Service {
     }
     private void broadcastState(boolean isPlaying) {
         Intent i = new Intent(STATE).putExtra("playing", isPlaying).putExtra("title", title).putExtra("artist", artist);
-        if (player != null) try { i.putExtra("duration", player.getDuration()).putExtra("position", player.getCurrentPosition()); } catch (IllegalStateException ignored) { }
+        if (player != null) try { i.putExtra("duration", (long)player.getDuration()).putExtra("position", (long)player.getCurrentPosition()); } catch (IllegalStateException ignored) { }
         sendBroadcast(i);
     }
     private void releasePlayer() { releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
