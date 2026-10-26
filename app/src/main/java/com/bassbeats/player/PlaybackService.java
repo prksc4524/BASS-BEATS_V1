@@ -37,6 +37,7 @@ public class PlaybackService extends Service {
     private MediaSession session;
     private Equalizer equalizer;
     private BassBoost bassBoost;
+    private boolean playerPrepared = false;
     private String title = "BASS BEATS";
     private String artist = "Offline Player";
 
@@ -77,7 +78,7 @@ public class PlaybackService extends Service {
         if (PLAY.equals(action)) startTrack(intent);
         else if (TOGGLE.equals(action)) togglePlayback();
         else if (GET_STATE.equals(action)) broadcastState(player != null && player.isPlaying());
-        else if (SEEK.equals(action)) { if (player != null) try { player.seekTo((int)Math.max(0, Math.min(Integer.MAX_VALUE, intent.getLongExtra("position", 0)))); broadcastState(player.isPlaying()); } catch (IllegalStateException ignored) {} }
+        else if (SEEK.equals(action)) { if (player != null && playerPrepared) try { long duration = Math.max(0L, (long) player.getDuration()); long target = Math.max(0L, Math.min(duration, intent.getLongExtra("position", 0L))); player.seekTo((int)Math.min(Integer.MAX_VALUE, target)); broadcastState(player.isPlaying()); } catch (IllegalStateException ignored) {} }
         else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT));
         else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV));
         else if (EQ_BAND.equals(action)) {
@@ -109,6 +110,7 @@ public class PlaybackService extends Service {
             player.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
             player.setDataSource(this, Uri.parse(uriString));
             player.setOnPreparedListener(mp -> {
+                playerPrepared = true;
                 mp.start();
                 initAudioEffects(mp.getAudioSessionId());
                 updateSession(true);
@@ -226,11 +228,17 @@ public class PlaybackService extends Service {
         if (manager != null) manager.notify(NOTIFICATION_ID, buildNotification(isPlaying));
     }
     private void broadcastState(boolean isPlaying) {
-        Intent i = new Intent(STATE).putExtra("playing", isPlaying).putExtra("title", title).putExtra("artist", artist);
-        if (player != null) try { i.putExtra("duration", (long)player.getDuration()).putExtra("position", (long)player.getCurrentPosition()); } catch (IllegalStateException ignored) { }
+        Intent i = new Intent(STATE).setPackage(getPackageName())
+            .putExtra("playing", isPlaying).putExtra("title", title).putExtra("artist", artist);
+        long duration = 0L, position = 0L;
+        if (player != null && playerPrepared) {
+            try { duration = Math.max(0, (long) player.getDuration()); position = Math.max(0, (long) player.getCurrentPosition()); }
+            catch (IllegalStateException ignored) { duration = 0L; position = 0L; }
+        }
+        i.putExtra("duration", duration).putExtra("position", position);
         sendBroadcast(i);
     }
-    private void releasePlayer() { releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
+    private void releasePlayer() { playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
         releasePlayer();
         if (session != null) { session.setActive(false); session.release(); session = null; }
