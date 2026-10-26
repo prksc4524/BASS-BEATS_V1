@@ -31,6 +31,7 @@ public class PlaybackService extends Service {
     public static final String SEEK = "com.bassbeats.player.SEEK";
     public static final String EQ_BAND = "com.bassbeats.player.EQ_BAND";
     public static final String BASS = "com.bassbeats.player.BASS";
+    public static final String STATE_REQUEST = "com.bassbeats.player.STATE_REQUEST";
 
     private static final String CHANNEL_ID = "bass_playback";
     private static final int NOTIFICATION_ID = 42;
@@ -40,9 +41,7 @@ public class PlaybackService extends Service {
     private String artist = "Offline Player";
     private Equalizer equalizer;
     private BassBoost bassBoost;
-    private final int[] requestedGains = new int[10];
-    private boolean bassEnabled = false;
-    private int bassStrength = 700;
+    private boolean prepared = false;
     private final Handler ticker = new Handler(Looper.getMainLooper());
     private final Runnable tick = new Runnable() { @Override public void run() { if (player != null) { boolean active=false; try { active=player.isPlaying(); } catch(Exception ignored) {} broadcastState(active); if(active) updateSession(true); } ticker.postDelayed(this, 500); } };
 
@@ -60,8 +59,8 @@ public class PlaybackService extends Service {
             @Override public void onSeekTo(long pos) { if (player != null) try { player.seekTo((int)pos); broadcastState(player.isPlaying()); } catch (Exception ignored) {} }
             @Override public void onPlay() { resumePlayback(); }
             @Override public void onPause() { pausePlayback(); }
-            @Override public void onSkipToNext() { sendBroadcast(new Intent(SKIP_NEXT)); }
-            @Override public void onSkipToPrevious() { sendBroadcast(new Intent(SKIP_PREV)); }
+            @Override public void onSkipToNext() { sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName())); }
+            @Override public void onSkipToPrevious() { sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName())); }
             @Override public boolean onMediaButtonEvent(Intent intent) {
                 KeyEvent event = intent == null ? null : intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
                 if (event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -69,8 +68,8 @@ public class PlaybackService extends Service {
                     if (key == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { togglePlayback(); return true; }
                     if (key == KeyEvent.KEYCODE_MEDIA_PLAY) { resumePlayback(); return true; }
                     if (key == KeyEvent.KEYCODE_MEDIA_PAUSE) { pausePlayback(); return true; }
-                    if (key == KeyEvent.KEYCODE_MEDIA_NEXT) { sendBroadcast(new Intent(SKIP_NEXT)); return true; }
-                    if (key == KeyEvent.KEYCODE_MEDIA_PREVIOUS) { sendBroadcast(new Intent(SKIP_PREV)); return true; }
+                    if (key == KeyEvent.KEYCODE_MEDIA_NEXT) { sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName())); return true; }
+                    if (key == KeyEvent.KEYCODE_MEDIA_PREVIOUS) { sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName())); return true; }
                 }
                 return super.onMediaButtonEvent(intent);
             }
@@ -84,8 +83,9 @@ public class PlaybackService extends Service {
         String action = intent.getAction();
         if (PLAY.equals(action)) startTrack(intent);
         else if (TOGGLE.equals(action)) togglePlayback();
-        else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT));
-        else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV));
+        else if (STATE_REQUEST.equals(action)) broadcastState(player != null && isActuallyPlaying());
+        else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName()));
+        else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName()));
         else if (SEEK.equals(action) && player != null) { try { player.seekTo(intent.getIntExtra("position", 0)); broadcastState(player.isPlaying()); } catch (Exception ignored) {} }
         else if (EQ_BAND.equals(action)) applyBand(intent.getIntExtra("band", 0), intent.getIntExtra("gain", 0));
         else if (BASS.equals(action)) applyBass(intent.getBooleanExtra("enabled", false), intent.getIntExtra("strength", 700));
@@ -102,11 +102,13 @@ public class PlaybackService extends Service {
         // Promote to foreground immediately, before asynchronous media preparation.
         startForeground(NOTIFICATION_ID, buildNotification(false));
         releasePlayer();
+        prepared = false;
         try {
             player = new MediaPlayer();
             player.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
             player.setDataSource(this, Uri.parse(uriString));
             player.setOnPreparedListener(mp -> {
+                prepared = true;
                 mp.start();
                 attachEffects(mp.getAudioSessionId());
                 updateSession(true);
@@ -117,7 +119,7 @@ public class PlaybackService extends Service {
                 updateSession(false);
                 updateNotification(false);
                 broadcastState(false);
-                sendBroadcast(new Intent(SKIP_NEXT));
+                sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName()));
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 broadcastState(false);
@@ -132,6 +134,8 @@ public class PlaybackService extends Service {
             updateNotification(false);
         }
     }
+
+    private boolean isActuallyPlaying() { try { return player != null && player.isPlaying(); } catch (Exception ignored) { return false; } }
 
     private void togglePlayback() {
         if (player == null) return;
@@ -175,34 +179,40 @@ public class PlaybackService extends Service {
         if (manager != null) manager.notify(NOTIFICATION_ID, buildNotification(isPlaying));
     }
     private void broadcastState(boolean isPlaying) {
-        Intent i = new Intent(STATE).putExtra("playing", isPlaying).putExtra("title", title).putExtra("artist", artist);
-        if (player != null) try { i.putExtra("duration", player.getDuration()).putExtra("position", player.getCurrentPosition()); } catch (IllegalStateException ignored) { }
+        Intent i = new Intent(STATE).setPackage(getPackageName())
+                .putExtra("playing", isPlaying)
+                .putExtra("title", title)
+                .putExtra("artist", artist)
+                .putExtra("duration", 0L)
+                .putExtra("position", 0L);
+        // Read duration and position independently so one unavailable value does not
+        // prevent the other from reaching the player UI.
+        if (player != null && prepared) {
+            try { i.putExtra("duration", Math.max(0L, (long) player.getDuration())); } catch (Exception ignored) { }
+            try { i.putExtra("position", Math.max(0L, (long) player.getCurrentPosition())); } catch (Exception ignored) { }
+        }
         sendBroadcast(i);
     }
     private void attachEffects(int sessionId) {
         releaseEffects();
-        try { equalizer = new Equalizer(0, sessionId); equalizer.setEnabled(true); for(int i=0;i<10;i++)applyBand(i,requestedGains[i]); } catch (Exception ignored) { equalizer = null; }
-        try { bassBoost = new BassBoost(0, sessionId); bassBoost.setStrength((short)bassStrength); bassBoost.setEnabled(bassEnabled); } catch (Exception ignored) { bassBoost = null; }
+        try { equalizer = new Equalizer(0, sessionId); equalizer.setEnabled(true); } catch (Exception ignored) { equalizer = null; }
+        try { bassBoost = new BassBoost(0, sessionId); bassBoost.setEnabled(false); } catch (Exception ignored) { bassBoost = null; }
     }
     private void applyBand(int band, int gain) {
-        if (band < 0 || band >= requestedGains.length) return;
-        requestedGains[band] = Math.max(-6, Math.min(6, gain));
         if (equalizer == null) return;
         try {
             short count = equalizer.getNumberOfBands();
             if (count <= 0) return;
-            // Spread the ten UI controls over the number of bands supported by this device.
-            short actual = (short)Math.round(band * (count - 1) / 9.0);
+            short actual = (short)Math.max(0, Math.min(count - 1, band));
             short[] range = equalizer.getBandLevelRange();
-            int millibels = requestedGains[band] * 100;
+            int millibels = gain * 100;
             millibels = Math.max(range[0], Math.min(range[1], millibels));
             equalizer.setBandLevel(actual, (short)millibels);
         } catch (Exception ignored) { }
     }
     private void applyBass(boolean enabled, int strength) {
-        bassEnabled = enabled; bassStrength = Math.max(0, Math.min(1000, strength));
         if (bassBoost == null) return;
-        try { bassBoost.setStrength((short)bassStrength); bassBoost.setEnabled(bassEnabled); } catch (Exception ignored) { }
+        try { bassBoost.setStrength((short)Math.max(0, Math.min(1000, strength))); bassBoost.setEnabled(enabled); } catch (Exception ignored) { }
     }
     private void releaseEffects() {
         try { if (equalizer != null) { equalizer.setEnabled(false); equalizer.release(); } } catch (Exception ignored) { }
