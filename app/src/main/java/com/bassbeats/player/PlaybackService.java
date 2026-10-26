@@ -16,6 +16,8 @@ import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 
 public class PlaybackService extends Service {
@@ -38,6 +40,11 @@ public class PlaybackService extends Service {
     private Equalizer equalizer;
     private BassBoost bassBoost;
     private boolean playerPrepared = false;
+    private final Handler fadeHandler = new Handler(Looper.getMainLooper());
+    private Runnable fadeRunnable;
+    private float currentVolume = 1.0f;
+    private static final long FADE_DURATION_MS = 1500L;
+    private static final long FADE_STEP_MS = 30L;
     private String title = "BASS BEATS";
     private String artist = "Offline Player";
 
@@ -111,7 +118,11 @@ public class PlaybackService extends Service {
             player.setDataSource(this, Uri.parse(uriString));
             player.setOnPreparedListener(mp -> {
                 playerPrepared = true;
+                cancelFade();
+                currentVolume = 0.0f;
+                mp.setVolume(0.0f, 0.0f);
                 mp.start();
+                fadeTo(1.0f, FADE_DURATION_MS, null);
                 initAudioEffects(mp.getAudioSessionId());
                 updateSession(true);
                 updateNotification(true);
@@ -191,14 +202,76 @@ public class PlaybackService extends Service {
         if (player.isPlaying()) pausePlayback(); else resumePlayback();
     }
     private void resumePlayback() {
-        if (player == null) return;
-        try { player.start(); updateSession(true); updateNotification(true); broadcastState(true); } catch (IllegalStateException ignored) { }
+        if (player == null || !playerPrepared) return;
+        try {
+            cancelFade();
+            if (!player.isPlaying()) {
+                currentVolume = 0.0f;
+                player.setVolume(0.0f, 0.0f);
+                player.start();
+                fadeTo(1.0f, FADE_DURATION_MS, null);
+            } else if (currentVolume < 1.0f) {
+                fadeTo(1.0f, FADE_DURATION_MS, null);
+            }
+            updateSession(true); updateNotification(true); broadcastState(true);
+        } catch (IllegalStateException ignored) { }
     }
     private void pausePlayback() {
-        if (player != null) {
-            try { if (player.isPlaying()) player.pause(); } catch (IllegalStateException ignored) { }
+        if (player == null || !playerPrepared) {
+            updateSession(false); updateNotification(false); broadcastState(false);
+            return;
         }
+        try {
+            if (player.isPlaying()) {
+                fadeTo(0.0f, FADE_DURATION_MS, () -> {
+                    try {
+                        if (player != null && playerPrepared && player.isPlaying()) player.pause();
+                    } catch (IllegalStateException ignored) { }
+                    currentVolume = 0.0f;
+                    updateSession(false); updateNotification(false); broadcastState(false);
+                });
+                return;
+            }
+        } catch (IllegalStateException ignored) { }
         updateSession(false); updateNotification(false); broadcastState(false);
+    }
+
+    private void cancelFade() {
+        if (fadeRunnable != null) {
+            fadeHandler.removeCallbacks(fadeRunnable);
+            fadeRunnable = null;
+        }
+    }
+
+    private void fadeTo(float targetVolume, long durationMs, Runnable onComplete) {
+        if (player == null || !playerPrepared) {
+            if (onComplete != null) onComplete.run();
+            return;
+        }
+        cancelFade();
+        final float startVolume = currentVolume;
+        final long startTime = android.os.SystemClock.uptimeMillis();
+        final long safeDuration = Math.max(1L, durationMs);
+        fadeRunnable = new Runnable() {
+            @Override public void run() {
+                if (player == null || !playerPrepared) {
+                    fadeRunnable = null;
+                    if (onComplete != null) onComplete.run();
+                    return;
+                }
+                float fraction = Math.min(1.0f, (android.os.SystemClock.uptimeMillis() - startTime) / (float) safeDuration);
+                currentVolume = startVolume + (targetVolume - startVolume) * fraction;
+                try { player.setVolume(currentVolume, currentVolume); }
+                catch (IllegalStateException ignored) { fadeRunnable = null; return; }
+                if (fraction >= 1.0f) {
+                    fadeRunnable = null;
+                    if (onComplete != null) onComplete.run();
+                } else {
+                    fadeHandler.postDelayed(this, FADE_STEP_MS);
+                }
+            }
+        };
+        fadeHandler.post(fadeRunnable);
     }
     private void updateSession(boolean isPlaying) {
         if (session == null) return;
@@ -238,8 +311,9 @@ public class PlaybackService extends Service {
         i.putExtra("duration", duration).putExtra("position", position);
         sendBroadcast(i);
     }
-    private void releasePlayer() { playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
+    private void releasePlayer() { cancelFade(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
+        cancelFade();
         releasePlayer();
         if (session != null) { session.setActive(false); session.release(); session = null; }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE); else stopForeground(true);
