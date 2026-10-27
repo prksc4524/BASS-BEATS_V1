@@ -32,6 +32,7 @@ public class PlaybackService extends Service {
     public static final String SEEK = "com.bassbeats.player.SEEK";
     public static final String SKIP_NEXT = "com.bassbeats.player.SKIP_NEXT";
     public static final String SKIP_PREV = "com.bassbeats.player.SKIP_PREV";
+    public static final String SET_REPEAT = "com.bassbeats.player.SET_REPEAT";
 
     private static final String CHANNEL_ID = "bass_playback";
     private static final int NOTIFICATION_ID = 42;
@@ -51,7 +52,7 @@ public class PlaybackService extends Service {
     private String[] queueTitles = new String[0];
     private String[] queueArtists = new String[0];
     private int queueIndex = -1;
-    private boolean repeatOne = false;
+    private int repeatMode = 0;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -66,8 +67,8 @@ public class PlaybackService extends Service {
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { resumePlayback(); }
             @Override public void onPause() { pausePlayback(); }
-            @Override public void onSkipToNext() { sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName())); }
-            @Override public void onSkipToPrevious() { sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName())); }
+            @Override public void onSkipToNext() { skipQueue(1); }
+            @Override public void onSkipToPrevious() { skipQueue(-1); }
             @Override public boolean onMediaButtonEvent(Intent intent) {
                 KeyEvent event = intent == null ? null : intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
                 if (event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -75,8 +76,8 @@ public class PlaybackService extends Service {
                     if (key == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { togglePlayback(); return true; }
                     if (key == KeyEvent.KEYCODE_MEDIA_PLAY) { resumePlayback(); return true; }
                     if (key == KeyEvent.KEYCODE_MEDIA_PAUSE) { pausePlayback(); return true; }
-                    if (key == KeyEvent.KEYCODE_MEDIA_NEXT) { sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName())); return true; }
-                    if (key == KeyEvent.KEYCODE_MEDIA_PREVIOUS) { sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName())); return true; }
+                    if (key == KeyEvent.KEYCODE_MEDIA_NEXT) { skipQueue(1); return true; }
+                    if (key == KeyEvent.KEYCODE_MEDIA_PREVIOUS) { skipQueue(-1); return true; }
                 }
                 return super.onMediaButtonEvent(intent);
             }
@@ -91,8 +92,9 @@ public class PlaybackService extends Service {
         else if (TOGGLE.equals(action)) togglePlayback();
         else if (GET_STATE.equals(action)) broadcastState(player != null && player.isPlaying());
         else if (SEEK.equals(action)) { if (player != null && playerPrepared) try { long duration = Math.max(0L, (long) player.getDuration()); long target = Math.max(0L, Math.min(duration, intent.getLongExtra("position", 0L))); player.seekTo((int)Math.min(Integer.MAX_VALUE, target)); broadcastState(player.isPlaying()); } catch (IllegalStateException ignored) {} }
-        else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName()));
-        else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName()));
+        else if (NEXT.equals(action)) skipQueue(1);
+        else if (PREV.equals(action)) skipQueue(-1);
+        else if (SET_REPEAT.equals(action)) repeatMode = Math.max(0, Math.min(2, intent.getIntExtra("repeat_mode", 0)));
         else if (EQ_BAND.equals(action)) {
             int band = intent.getIntExtra("band", -1);
             int level = intent.getIntExtra("level", 0);
@@ -108,6 +110,7 @@ public class PlaybackService extends Service {
     }
 
     private void startTrack(Intent intent) {
+        if (intent.hasExtra("repeat_mode")) repeatMode = Math.max(0, Math.min(2, intent.getIntExtra("repeat_mode", repeatMode)));
         if (intent.hasExtra("queue_uris")) {
             queueUris = intent.getStringArrayExtra("queue_uris");
             queueTitles = intent.getStringArrayExtra("queue_titles");
@@ -141,10 +144,13 @@ public class PlaybackService extends Service {
             });
             player.setOnCompletionListener(mp -> {
                 cancelFade();
-                if (queueUris != null && queueIndex >= 0 && queueIndex + 1 < queueUris.length) {
+                if (repeatMode == 2 && queueUris != null && queueIndex >= 0 && queueIndex < queueUris.length) {
+                    startQueuedTrack();
+                } else if (queueUris != null && queueIndex >= 0 && queueIndex + 1 < queueUris.length) {
                     queueIndex++;
                     startQueuedTrack();
-                } else if (repeatOne && queueUris != null && queueIndex >= 0 && queueIndex < queueUris.length) {
+                } else if (repeatMode == 1 && queueUris != null && queueUris.length > 0) {
+                    queueIndex = 0;
                     startQueuedTrack();
                 } else {
                     updateSession(false);
@@ -164,6 +170,16 @@ public class PlaybackService extends Service {
             broadcastState(false);
             updateNotification(false);
         }
+    }
+
+    private void skipQueue(int direction) {
+        if (queueUris == null || queueUris.length == 0 || queueIndex < 0) { sendBroadcast(new Intent(direction > 0 ? SKIP_NEXT : SKIP_PREV).setPackage(getPackageName())); return; }
+        int next = queueIndex + direction;
+        if (next < 0) next = repeatMode == 1 ? queueUris.length - 1 : 0;
+        if (next >= queueUris.length) next = repeatMode == 1 ? 0 : queueUris.length - 1;
+        if (next == queueIndex && repeatMode != 1) return;
+        queueIndex = next;
+        startQueuedTrack();
     }
 
     private void startQueuedTrack() {
