@@ -61,8 +61,8 @@ public class PlaybackService extends Service {
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { resumePlayback(); }
             @Override public void onPause() { pausePlayback(); }
-            @Override public void onSkipToNext() { sendBroadcast(new Intent(SKIP_NEXT)); }
-            @Override public void onSkipToPrevious() { sendBroadcast(new Intent(SKIP_PREV)); }
+            @Override public void onSkipToNext() { sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName())); }
+            @Override public void onSkipToPrevious() { sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName())); }
             @Override public boolean onMediaButtonEvent(Intent intent) {
                 KeyEvent event = intent == null ? null : intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
                 if (event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -70,8 +70,8 @@ public class PlaybackService extends Service {
                     if (key == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { togglePlayback(); return true; }
                     if (key == KeyEvent.KEYCODE_MEDIA_PLAY) { resumePlayback(); return true; }
                     if (key == KeyEvent.KEYCODE_MEDIA_PAUSE) { pausePlayback(); return true; }
-                    if (key == KeyEvent.KEYCODE_MEDIA_NEXT) { sendBroadcast(new Intent(SKIP_NEXT)); return true; }
-                    if (key == KeyEvent.KEYCODE_MEDIA_PREVIOUS) { sendBroadcast(new Intent(SKIP_PREV)); return true; }
+                    if (key == KeyEvent.KEYCODE_MEDIA_NEXT) { sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName())); return true; }
+                    if (key == KeyEvent.KEYCODE_MEDIA_PREVIOUS) { sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName())); return true; }
                 }
                 return super.onMediaButtonEvent(intent);
             }
@@ -86,8 +86,8 @@ public class PlaybackService extends Service {
         else if (TOGGLE.equals(action)) togglePlayback();
         else if (GET_STATE.equals(action)) broadcastState(player != null && player.isPlaying());
         else if (SEEK.equals(action)) { if (player != null && playerPrepared) try { long duration = Math.max(0L, (long) player.getDuration()); long target = Math.max(0L, Math.min(duration, intent.getLongExtra("position", 0L))); player.seekTo((int)Math.min(Integer.MAX_VALUE, target)); broadcastState(player.isPlaying()); } catch (IllegalStateException ignored) {} }
-        else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT));
-        else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV));
+        else if (NEXT.equals(action)) sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName()));
+        else if (PREV.equals(action)) sendBroadcast(new Intent(SKIP_PREV).setPackage(getPackageName()));
         else if (EQ_BAND.equals(action)) {
             int band = intent.getIntExtra("band", -1);
             int level = intent.getIntExtra("level", 0);
@@ -132,7 +132,7 @@ public class PlaybackService extends Service {
                 updateSession(false);
                 updateNotification(false);
                 broadcastState(false);
-                sendBroadcast(new Intent(SKIP_NEXT));
+                sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName()));
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 broadcastState(false);
