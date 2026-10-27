@@ -47,6 +47,11 @@ public class PlaybackService extends Service {
     private static final long FADE_STEP_MS = 30L;
     private String title = "BASS BEATS";
     private String artist = "Offline Player";
+    private String[] queueUris = new String[0];
+    private String[] queueTitles = new String[0];
+    private String[] queueArtists = new String[0];
+    private int queueIndex = -1;
+    private boolean repeatOne = false;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -103,6 +108,12 @@ public class PlaybackService extends Service {
     }
 
     private void startTrack(Intent intent) {
+        if (intent.hasExtra("queue_uris")) {
+            queueUris = intent.getStringArrayExtra("queue_uris");
+            queueTitles = intent.getStringArrayExtra("queue_titles");
+            queueArtists = intent.getStringArrayExtra("queue_artists");
+            queueIndex = intent.getIntExtra("queue_index", -1);
+        }
         String uriString = intent.getStringExtra("uri");
         if (uriString == null) { broadcastState(false); return; }
         title = intent.getStringExtra("title");
@@ -129,10 +140,17 @@ public class PlaybackService extends Service {
                 broadcastState(true);
             });
             player.setOnCompletionListener(mp -> {
-                updateSession(false);
-                updateNotification(false);
-                broadcastState(false);
-                sendBroadcast(new Intent(SKIP_NEXT).setPackage(getPackageName()));
+                cancelFade();
+                if (queueUris != null && queueIndex >= 0 && queueIndex + 1 < queueUris.length) {
+                    queueIndex++;
+                    startQueuedTrack();
+                } else if (repeatOne && queueUris != null && queueIndex >= 0 && queueIndex < queueUris.length) {
+                    startQueuedTrack();
+                } else {
+                    updateSession(false);
+                    updateNotification(false);
+                    broadcastState(false);
+                }
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 broadcastState(false);
@@ -146,6 +164,20 @@ public class PlaybackService extends Service {
             broadcastState(false);
             updateNotification(false);
         }
+    }
+
+    private void startQueuedTrack() {
+        if (queueUris == null || queueIndex < 0 || queueIndex >= queueUris.length) return;
+        Intent next = new Intent(this, PlaybackService.class);
+        next.setAction(PLAY);
+        next.putExtra("uri", queueUris[queueIndex]);
+        next.putExtra("title", queueTitles != null && queueIndex < queueTitles.length ? queueTitles[queueIndex] : "Unknown title");
+        next.putExtra("artist", queueArtists != null && queueIndex < queueArtists.length ? queueArtists[queueIndex] : "Unknown artist");
+        next.putExtra("queue_uris", queueUris);
+        next.putExtra("queue_titles", queueTitles);
+        next.putExtra("queue_artists", queueArtists);
+        next.putExtra("queue_index", queueIndex);
+        startTrack(next);
     }
 
     private void initAudioEffects(int audioSessionId) {
@@ -302,7 +334,7 @@ public class PlaybackService extends Service {
     }
     private void broadcastState(boolean isPlaying) {
         Intent i = new Intent(STATE).setPackage(getPackageName())
-            .putExtra("playing", isPlaying).putExtra("title", title).putExtra("artist", artist);
+            .putExtra("playing", isPlaying).putExtra("title", title).putExtra("artist", artist).putExtra("queue_index", queueIndex);
         long duration = 0L, position = 0L;
         if (player != null && playerPrepared) {
             try { duration = Math.max(0, (long) player.getDuration()); position = Math.max(0, (long) player.getCurrentPosition()); }
