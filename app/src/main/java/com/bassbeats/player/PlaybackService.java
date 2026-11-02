@@ -53,6 +53,7 @@ public class PlaybackService extends Service {
     private String[] queueArtists = new String[0];
     private int queueIndex = -1;
     private int repeatMode = 0;
+    private boolean radioMode = false;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -110,6 +111,8 @@ public class PlaybackService extends Service {
     }
 
     private void startTrack(Intent intent) {
+        radioMode = intent.getBooleanExtra("is_radio", false);
+        if (radioMode) { queueUris = new String[0]; queueTitles = new String[0]; queueArtists = new String[0]; queueIndex = -1; }
         if (intent.hasExtra("repeat_mode")) repeatMode = Math.max(0, Math.min(2, intent.getIntExtra("repeat_mode", repeatMode)));
         if (intent.hasExtra("queue_uris")) {
             queueUris = intent.getStringArrayExtra("queue_uris");
