@@ -1,13 +1,16 @@
-# BASS BEATS Android project
+# BASS BEATS V1 - Radio integration starter
 
-Native Java Android offline music-player starter project.
+This project preserves the existing offline player and adds a RADIO tab.
+
+## Added
+- Internet permission and network-state permission.
+- Radio tab with Hindi Music, Chhattisgarh, and India News sections.
+- Vividh Bharati, FM Gold Delhi, and FM Rainbow Delhi direct HLS stream candidates.
+- Radio playback is routed through the existing PlaybackService so the existing audio-session Equalizer and BassBoost can be applied.
+- Chhattisgarh and News entries are shown as pending until their direct stream URLs are verified.
+
+## Important testing note
+The three HLS URLs are publicly listed legacy Akashvani stream URLs. They were not tested from this build environment, so availability may have changed. They may need replacement with current official stream endpoints. The project is source code only; no APK has been built or device-tested.
 
 ## Build
-The GitHub Actions workflow at `.github/workflows/build-apk.yml` builds a debug APK and uploads it as the `BASS-BEATS-APK` artifact.
-
-## Notes
-- Package/application ID: `com.bassbeats.player`
-- Minimum Android: 8.0 (API 26); target SDK 35
-- Local audio is read from Android MediaStore.
-- Playback runs in `PlaybackService` with a media notification and lock-screen session.
-- Some advanced items (persistent playlists/favorites, real audio-effect attachment, live visualizer, sleep-free playback controls) still need further implementation; the APK build alone does not imply every planned feature is finished.
+Open this folder in Android Studio (compileSdk 35, Android Gradle Plugin compatible with your installed Android Studio). Sync Gradle, then Build > Build APK(s).
