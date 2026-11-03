@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.BassBoost;
+import android.media.audiofx.Visualizer;
 import android.media.MediaPlayer;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
@@ -33,6 +34,7 @@ public class PlaybackService extends Service {
     public static final String SKIP_NEXT = "com.bassbeats.player.SKIP_NEXT";
     public static final String SKIP_PREV = "com.bassbeats.player.SKIP_PREV";
     public static final String SET_REPEAT = "com.bassbeats.player.SET_REPEAT";
+    public static final String VISUALIZER_DATA = "com.bassbeats.player.VISUALIZER_DATA";
 
     private static final String CHANNEL_ID = "bass_playback";
     private static final int NOTIFICATION_ID = 42;
@@ -40,6 +42,7 @@ public class PlaybackService extends Service {
     private MediaSession session;
     private Equalizer equalizer;
     private BassBoost bassBoost;
+    private Visualizer visualizer;
     private boolean playerPrepared = false;
     private final Handler fadeHandler = new Handler(Looper.getMainLooper());
     private Runnable fadeRunnable;
@@ -138,6 +141,7 @@ public class PlaybackService extends Service {
                 mp.start();
                 fadeTo(1.0f, FADE_DURATION_MS, null);
                 initAudioEffects(mp.getAudioSessionId());
+                initVisualizer(mp.getAudioSessionId());
                 updateSession(true);
                 updateNotification(true);
                 broadcastState(true);
@@ -213,6 +217,32 @@ public class PlaybackService extends Service {
             bassBoost.setStrength((short) Math.max(0, Math.min(1000, strength)));
             bassBoost.setEnabled(enabled);
         } catch (Exception ignored) { if (bassBoost != null) { try { bassBoost.release(); } catch (Exception e) {} bassBoost = null; } }
+    }
+
+    private void initVisualizer(int audioSessionId) {
+        releaseVisualizer();
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        try {
+            visualizer = new Visualizer(audioSessionId);
+            int[] range = Visualizer.getCaptureSizeRange();
+            visualizer.setCaptureSize(range[1]);
+            visualizer.setDataCaptureListener(new Visualizer.OnDataCaptureListener() {
+                @Override public void onWaveFormDataCapture(Visualizer effect, byte[] waveform, int samplingRate) {
+                    Intent data = new Intent(VISUALIZER_DATA).setPackage(getPackageName());
+                    data.putExtra("waveform", waveform);
+                    sendBroadcast(data);
+                }
+                @Override public void onFftDataCapture(Visualizer effect, byte[] fft, int samplingRate) { }
+            }, Math.min(Visualizer.getMaxCaptureRate(), 20000), true, false);
+            visualizer.setEnabled(true);
+        } catch (Exception ignored) { releaseVisualizer(); }
+    }
+
+    private void releaseVisualizer() {
+        if (visualizer != null) {
+            try { visualizer.setEnabled(false); visualizer.release(); } catch (Exception ignored) { }
+            visualizer = null;
+        }
     }
 
     private void applyBand(int uiBand, int db) {
@@ -359,7 +389,7 @@ public class PlaybackService extends Service {
         i.putExtra("duration", duration).putExtra("position", position);
         sendBroadcast(i);
     }
-    private void releasePlayer() { cancelFade(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
+    private void releasePlayer() { cancelFade(); releaseVisualizer(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
         cancelFade();
         releasePlayer();
