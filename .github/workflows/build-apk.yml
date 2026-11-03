@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build signed Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -34,19 +34,39 @@ jobs:
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
 
-      - name: Build Debug APK
-        run: gradle --no-daemon assembleDebug
-
-      - name: Verify APK
+      - name: Restore permanent signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BASS_BEATS_KEYSTORE_BASE64 }}
+          BASS_BEATS_KEYSTORE_PASSWORD: ${{ secrets.BASS_BEATS_KEYSTORE_PASSWORD }}
+          BASS_BEATS_KEY_ALIAS: ${{ secrets.BASS_BEATS_KEY_ALIAS }}
+          BASS_BEATS_KEY_PASSWORD: ${{ secrets.BASS_BEATS_KEY_PASSWORD }}
         run: |
-          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -n "$KEYSTORE_BASE64"
+          test -n "$BASS_BEATS_KEYSTORE_PASSWORD"
+          test -n "$BASS_BEATS_KEY_ALIAS"
+          test -n "$BASS_BEATS_KEY_PASSWORD"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/bassbeats-release.jks"
+          test -s "$RUNNER_TEMP/bassbeats-release.jks"
+          echo "BASS_BEATS_KEYSTORE_FILE=$RUNNER_TEMP/bassbeats-release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed Release APK
+        env:
+          BASS_BEATS_KEYSTORE_PASSWORD: ${{ secrets.BASS_BEATS_KEYSTORE_PASSWORD }}
+          BASS_BEATS_KEY_ALIAS: ${{ secrets.BASS_BEATS_KEY_ALIAS }}
+          BASS_BEATS_KEY_PASSWORD: ${{ secrets.BASS_BEATS_KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Verify APK signature
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
           test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           ls -lh "$APK"
 
-      - name: Upload APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
           name: BASS-BEATS-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
