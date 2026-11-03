@@ -1,36 +1,6 @@
 plugins { id 'com.android.application' }
-
-def releaseStoreFile = System.getenv('BASS_BEATS_KEYSTORE_FILE')
-def releaseStorePassword = System.getenv('BASS_BEATS_KEYSTORE_PASSWORD')
-def releaseKeyAlias = System.getenv('BASS_BEATS_KEY_ALIAS')
-def releaseKeyPassword = System.getenv('BASS_BEATS_KEY_PASSWORD')
-
 android {
     namespace 'com.bassbeats.player'
     compileSdk 35
-    defaultConfig {
-        applicationId 'com.bassbeats.player'
-        minSdk 26
-        targetSdk 35
-        versionCode 3
-        versionName '1.1.2'
-    }
-
-    signingConfigs {
-        release {
-            if (releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) {
-                storeFile file(releaseStoreFile)
-                storePassword releaseStorePassword
-                keyAlias releaseKeyAlias
-                keyPassword releaseKeyPassword
-            }
-        }
-    }
-
-    buildTypes {
-        release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
-        }
-    }
+    defaultConfig { applicationId 'com.bassbeats.player'; minSdk 26; targetSdk 35; versionCode 3; versionName '1.1.2' }
 }
