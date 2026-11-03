@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build signed Android APK
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -34,39 +34,19 @@ jobs:
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
 
-      - name: Restore permanent signing key
-        env:
-          KEYSTORE_BASE64: ${{ secrets.BASS_BEATS_KEYSTORE_BASE64 }}
-          BASS_BEATS_KEYSTORE_PASSWORD: ${{ secrets.BASS_BEATS_KEYSTORE_PASSWORD }}
-          BASS_BEATS_KEY_ALIAS: ${{ secrets.BASS_BEATS_KEY_ALIAS }}
-          BASS_BEATS_KEY_PASSWORD: ${{ secrets.BASS_BEATS_KEY_PASSWORD }}
-        run: |
-          test -n "$KEYSTORE_BASE64"
-          test -n "$BASS_BEATS_KEYSTORE_PASSWORD"
-          test -n "$BASS_BEATS_KEY_ALIAS"
-          test -n "$BASS_BEATS_KEY_PASSWORD"
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/bassbeats-release.jks"
-          test -s "$RUNNER_TEMP/bassbeats-release.jks"
-          echo "BASS_BEATS_KEYSTORE_FILE=$RUNNER_TEMP/bassbeats-release.jks" >> "$GITHUB_ENV"
+      - name: Build Debug APK
+        run: gradle --no-daemon assembleDebug
 
-      - name: Build signed Release APK
-        env:
-          BASS_BEATS_KEYSTORE_PASSWORD: ${{ secrets.BASS_BEATS_KEYSTORE_PASSWORD }}
-          BASS_BEATS_KEY_ALIAS: ${{ secrets.BASS_BEATS_KEY_ALIAS }}
-          BASS_BEATS_KEY_PASSWORD: ${{ secrets.BASS_BEATS_KEY_PASSWORD }}
-        run: gradle --no-daemon assembleRelease
-
-      - name: Verify APK signature
+      - name: Verify APK
         run: |
-          APK="app/build/outputs/apk/release/app-release.apk"
+          APK="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           ls -lh "$APK"
 
-      - name: Upload signed APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BASS-BEATS-APK
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
