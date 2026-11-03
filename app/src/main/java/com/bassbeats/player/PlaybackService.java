@@ -7,6 +7,10 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
+import android.content.Context;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.BassBoost;
 import android.media.audiofx.Visualizer;
@@ -56,6 +60,15 @@ public class PlaybackService extends Service {
     private String[] queueArtists = new String[0];
     private int queueIndex = -1;
     private int repeatMode = 0;
+    private AudioManager audioManager;
+    private AudioManager.OnAudioFocusChangeListener focusChangeListener;
+    private boolean focusInterrupted = false;
+    private boolean externalAudioInterrupted = false;
+    private boolean callInProgress = false;
+    private boolean pausedForCall = false;
+    private boolean wasPlayingBeforeCall = false;
+    private TelephonyManager telephonyManager;
+    private PhoneStateListener phoneStateListener;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -65,6 +78,23 @@ public class PlaybackService extends Service {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        focusChangeListener = change -> {
+            if (change == AudioManager.AUDIOFOCUS_LOSS ||
+                change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ||
+                change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+                boolean active = isActuallyPlaying();
+                if (active) focusInterrupted = true;
+                if (callInProgress) {
+                    if (active) { pausedForCall = true; wasPlayingBeforeCall = true; }
+                } else if (active) {
+                    externalAudioInterrupted = true;
+                }
+                if (active) pausePlayback();
+            }
+            // AUDIOFOCUS_GAIN intentionally does not restart playback.
+        };
+        registerPhoneStateListener();
         session = new MediaSession(this, "BASS BEATS");
         session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
         session.setCallback(new MediaSession.Callback() {
@@ -138,7 +168,13 @@ public class PlaybackService extends Service {
                 cancelFade();
                 currentVolume = 0.0f;
                 mp.setVolume(0.0f, 0.0f);
+                if (!requestAudioFocus()) {
+                    updateSession(false); updateNotification(false); broadcastState(false);
+                    return;
+                }
                 mp.start();
+                focusInterrupted = false;
+                externalAudioInterrupted = false;
                 fadeTo(1.0f, FADE_DURATION_MS, null);
                 initAudioEffects(mp.getAudioSessionId());
                 initVisualizer(mp.getAudioSessionId());
@@ -275,6 +311,50 @@ public class PlaybackService extends Service {
         if (bassBoost != null) { try { bassBoost.setEnabled(false); bassBoost.release(); } catch (Exception ignored) { } bassBoost = null; }
     }
 
+    private boolean isActuallyPlaying() {
+        try { return player != null && playerPrepared && player.isPlaying(); }
+        catch (IllegalStateException ignored) { return false; }
+    }
+
+    private boolean requestAudioFocus() {
+        if (audioManager == null) audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null || focusChangeListener == null) return true;
+        int result = audioManager.requestAudioFocus(focusChangeListener,
+                AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void registerPhoneStateListener() {
+        if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        try {
+            telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            if (telephonyManager == null) return;
+            phoneStateListener = new PhoneStateListener() {
+                @Override public void onCallStateChanged(int state, String phoneNumber) {
+                    if (state == TelephonyManager.CALL_STATE_RINGING || state == TelephonyManager.CALL_STATE_OFFHOOK) {
+                        if (!callInProgress) {
+                            boolean playingBeforeInterruption = isActuallyPlaying() || focusInterrupted;
+                            wasPlayingBeforeCall = playingBeforeInterruption;
+                            pausedForCall = playingBeforeInterruption;
+                            externalAudioInterrupted = false;
+                        }
+                        callInProgress = true;
+                        if (isActuallyPlaying()) pausePlayback();
+                    } else if (state == TelephonyManager.CALL_STATE_IDLE) {
+                        boolean shouldResume = callInProgress && pausedForCall && wasPlayingBeforeCall && !externalAudioInterrupted;
+                        callInProgress = false;
+                        pausedForCall = false;
+                        wasPlayingBeforeCall = false;
+                        focusInterrupted = false;
+                        if (shouldResume && player != null && playerPrepared) resumePlayback();
+                    }
+                }
+            };
+            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+        } catch (SecurityException ignored) { }
+    }
+
     private void togglePlayback() {
         if (player == null) return;
         if (player.isPlaying()) pausePlayback(); else resumePlayback();
@@ -282,6 +362,14 @@ public class PlaybackService extends Service {
     private void resumePlayback() {
         if (player == null || !playerPrepared) return;
         try {
+            if (!requestAudioFocus()) {
+                updateSession(false); updateNotification(false); broadcastState(false);
+                return;
+            }
+            externalAudioInterrupted = false;
+            focusInterrupted = false;
+            pausedForCall = false;
+            wasPlayingBeforeCall = false;
             cancelFade();
             if (!player.isPlaying()) {
                 currentVolume = 0.0f;
@@ -392,6 +480,12 @@ public class PlaybackService extends Service {
     private void releasePlayer() { cancelFade(); releaseVisualizer(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
         cancelFade();
+        if (telephonyManager != null && phoneStateListener != null) {
+            try { telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE); } catch (Exception ignored) { }
+        }
+        if (audioManager != null && focusChangeListener != null) {
+            try { audioManager.abandonAudioFocus(focusChangeListener); } catch (Exception ignored) { }
+        }
         releasePlayer();
         if (session != null) { session.setActive(false); session.release(); session = null; }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE); else stopForeground(true);
