@@ -162,10 +162,39 @@ public class MainActivity extends Activity {
  TextView text(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;} View gap(int h){View v=new View(this);v.setLayoutParams(new LinearLayout.LayoutParams(1,dp(h)));return v;} int dp(float v){return (int)(v*getResources().getDisplayMetrics().density+.5f);} android.graphics.drawable.GradientDrawable round(int color,int radius){android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;} Button button(String s,Runnable r){Button b=new Button(this);b.setText(s);b.setTextColor(CYAN);b.setOnClickListener(v->r.run());return b;}
  class WaveView extends View {
   private final android.graphics.Paint wavePaint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-  private float[] levels=new float[96];
-  WaveView(Context context){super(context);setBackgroundColor(Color.BLACK);wavePaint.setColor(Color.WHITE);wavePaint.setStyle(android.graphics.Paint.Style.STROKE);wavePaint.setStrokeWidth(dp(1.7f));wavePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);wavePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-  void setWaveData(byte[] data){if(data==null||data.length<2)return;int count=levels.length;float[] raw=new float[count];for(int i=0;i<count;i++){int from=(int)((long)i*data.length/count);int to=Math.max(from+1,(int)((long)(i+1)*data.length/count));float sum=0f;int samples=0;for(int j=from;j<to&&j<data.length;j++){sum+=((data[j]&0xff)-128)/128f;samples++;}float average=samples==0?0f:sum/samples;raw[i]=Math.max(-.42f,Math.min(.42f,average*1.25f));}for(int i=0;i<count;i++){float left=raw[Math.max(0,i-1)],center=raw[i],right=raw[Math.min(count-1,i+1)];float smooth=left*.22f+center*.56f+right*.22f;levels[i]=levels[i]*.72f+smooth*.28f;}postInvalidateOnAnimation();}
-  @Override protected void onDraw(android.graphics.Canvas canvas){super.onDraw(canvas);float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;float mid=h*.5f;android.graphics.Path path=new android.graphics.Path();float amp=dp(38);for(int i=0;i<levels.length;i++){float x=(w*i)/(levels.length-1);float y=mid-levels[i]*amp;if(i==0)path.moveTo(x,y);else{float prevX=(w*(i-1))/(levels.length-1);float prevY=mid-levels[i-1]*amp;float cx=(prevX+x)*.5f;path.quadTo(cx,prevY,x,y);}}wavePaint.setAlpha(238);wavePaint.setStrokeWidth(dp(1.7f));canvas.drawPath(path,wavePaint);}
+  private final float[] levels=new float[96];
+  WaveView(Context context){super(context);setBackgroundColor(Color.BLACK);wavePaint.setColor(Color.WHITE);wavePaint.setStyle(android.graphics.Paint.Style.STROKE);wavePaint.setStrokeWidth(dp(2f));wavePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);wavePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+  void setWaveData(byte[] data){
+   if(data==null||data.length<2)return;
+   int count=levels.length;float[] raw=new float[count];
+   for(int i=0;i<count;i++){
+    int from=(int)((long)i*data.length/count),to=Math.max(from+1,(int)((long)(i+1)*data.length/count));
+    float sum=0f;int samples=0;
+    for(int j=from;j<to&&j<data.length;j++){sum+=((data[j]&0xff)-128)/128f;samples++;}
+    float average=samples==0?0f:sum/samples;
+    raw[i]=Math.max(-.48f,Math.min(.48f,average*1.45f));
+   }
+   for(int i=0;i<count;i++){
+    float smooth=raw[Math.max(0,i-2)]*.08f+raw[Math.max(0,i-1)]*.22f+raw[i]*.40f+raw[Math.min(count-1,i+1)]*.22f+raw[Math.min(count-1,i+2)]*.08f;
+    levels[i]=levels[i]*.84f+smooth*.16f;
+   }
+   postInvalidateOnAnimation();
+  }
+  @Override protected void onDraw(android.graphics.Canvas canvas){
+   super.onDraw(canvas);float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;
+   float mid=h*.5f,amp=dp(42);android.graphics.Path path=new android.graphics.Path();
+   float step=w/(levels.length-1);path.moveTo(0,mid-levels[0]*amp);
+   for(int i=0;i<levels.length-1;i++){
+    float x0=i*step,x1=(i+1)*step;
+    float y0=mid-levels[i]*amp,y1=mid-levels[i+1]*amp;
+    float prev=mid-levels[Math.max(0,i-1)]*amp;
+    float next=mid-levels[Math.min(levels.length-1,i+2)]*amp;
+    float c1x=x0+step/3f,c2x=x1-step/3f;
+    float c1y=y0-(y1-prev)/6f,c2y=y1+(next-y0)/6f;
+    path.cubicTo(c1x,c1y,c2x,c2y,x1,y1);
+   }
+   wavePaint.setAlpha(245);wavePaint.setStrokeWidth(dp(2f));canvas.drawPath(path,wavePaint);
+  }
  }
  class VisualizerView extends View {android.graphics.Paint p=new android.graphics.Paint(3);int[] vals=new int[36];VisualizerView(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);for(int i=0;i<vals.length;i++)vals[i]=(int)(20+Math.random()*90);}protected void onDraw(android.graphics.Canvas c){super.onDraw(c);float w=getWidth(),h=getHeight();p.setColor(PANEL);c.drawRoundRect(0,0,w,h,dp(20),dp(20),p);float bw=w/(vals.length*1.8f),gap=(w-bw*vals.length)/(vals.length+1);for(int i=0;i<vals.length;i++){float bh=dp(vals[i]);p.setShader(new android.graphics.LinearGradient(0,h/2-bh/2,0,h/2+bh/2,CYAN,Color.rgb(0,75,220),android.graphics.Shader.TileMode.CLAMP));c.drawRoundRect(gap+i*(bw+gap),h/2-bh/2,gap+i*(bw+gap)+bw,h/2+bh/2,dp(4),dp(4),p);}p.setShader(null);}}
 }
