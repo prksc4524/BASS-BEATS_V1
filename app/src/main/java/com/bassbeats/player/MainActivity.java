@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
   String[] freq={"31","62","125","250","500","1k","2k","4k","8k","16k"};
   int[] levels=new int[10];
   android.content.SharedPreferences prefs=getSharedPreferences("audio_effects",MODE_PRIVATE);
-  for(int i=0;i<10;i++) levels[i]=prefs.getInt("band_"+i,0);
+  for(int i=0;i<10;i++) levels[i]=Math.max(-8,Math.min(8,prefs.getInt("band_"+i,0)));
   TextView[] dbLabels=new TextView[10]; SeekBar[] sliders=new SeekBar[10];
   for(int i=0;i<10;i++){
    final int bandIndex=i;
