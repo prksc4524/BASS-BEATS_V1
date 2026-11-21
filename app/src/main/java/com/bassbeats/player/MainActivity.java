@@ -46,9 +46,15 @@ public class MainActivity extends Activity {
   LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);controls.setPadding(0,dp(5),0,dp(5));String[] c={"⤨","|◀","▶","▶|","↻"};for(int i=0;i<c.length;i++){final int n=i;TextView b=text(c[i],i==2?27:21,i==2?CYAN:WHITE,true);b.setGravity(Gravity.CENTER);if(n==2){playBtn=b;android.graphics.drawable.GradientDrawable playBg=round(Color.rgb(5,20,42),dp(32));playBg.setStroke(dp(1),CYAN);b.setBackground(playBg);b.setElevation(dp(3));}controls.addView(b,new LinearLayout.LayoutParams(0,dp(58),i==2?1.25f:1));b.setOnClickListener(v->{if(n==1)sendTransport(PlaybackService.PREV);else if(n==2)toggle();else if(n==3)sendTransport(PlaybackService.NEXT);else if(n==0){shuffleEnabled=!shuffleEnabled;b.setText(shuffleEnabled?"🔀":"⤨");b.setTextColor(shuffleEnabled?CYAN:WHITE);Toast.makeText(this,shuffleEnabled?"Shuffle on":"Shuffle off",Toast.LENGTH_SHORT).show();}else{repeatMode=(repeatMode+1)%3;b.setText(repeatMode==0?"↻":repeatMode==1?"🔁":"1↻");b.setTextColor(repeatMode==0?WHITE:CYAN);Toast.makeText(this,repeatMode==0?"Repeat off":repeatMode==1?"Repeat all":"Repeat one",Toast.LENGTH_SHORT).show();sendRepeatMode();}});}content.addView(controls);
  }
  android.graphics.Bitmap createDefaultArtwork(){
-  return BitmapFactory.decodeResource(getResources(),R.drawable.bass_beats_artwork);
+  int size=512;android.graphics.Bitmap bmp=android.graphics.Bitmap.createBitmap(size,size,android.graphics.Bitmap.Config.ARGB_8888);
+  android.graphics.Canvas canvas=new android.graphics.Canvas(bmp);android.graphics.Paint p=new android.graphics.Paint(3);
+  p.setShader(new android.graphics.LinearGradient(0,0,size,size,Color.rgb(18,34,62),Color.rgb(8,10,20),android.graphics.Shader.TileMode.CLAMP));canvas.drawRoundRect(0,0,size,size,64,64,p);p.setShader(null);
+  p.setColor(Color.rgb(35,55,88));for(int r=82;r<220;r+=17){p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(3);canvas.drawCircle(256,256,r,p);}p.setStyle(android.graphics.Paint.Style.FILL);
+  p.setShader(new android.graphics.RadialGradient(256,256,100,new int[]{Color.rgb(165,105,255),Color.rgb(45,125,255),Color.rgb(14,24,44)},null,android.graphics.Shader.TileMode.CLAMP));canvas.drawCircle(256,256,76,p);p.setShader(null);
+  p.setColor(Color.WHITE);p.setTextAlign(android.graphics.Paint.Align.CENTER);p.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));p.setTextSize(112);canvas.drawText("♫",256,295,p);
+  p.setColor(Color.rgb(110,150,255));p.setTextSize(22);p.setLetterSpacing(0.18f);canvas.drawText("BASS BEATS",256,430,p);return bmp;
  }
-void updateArtwork(){
+ void updateArtwork(){
   if(artworkView==null)return;
   artworkView.setImageDrawable(null);artworkView.setBackground(round(Color.rgb(9,18,32),dp(22)));
   if(current<0||current>=songs.size()){artworkView.setImageBitmap(createDefaultArtwork());return;}
