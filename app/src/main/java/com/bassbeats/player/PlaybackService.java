@@ -6,6 +6,8 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.telephony.PhoneStateListener;
@@ -71,6 +73,38 @@ public class PlaybackService extends Service {
     private TelephonyManager telephonyManager;
     private PhoneStateListener phoneStateListener;
     private CallStateCallback callStateCallback;
+
+    // Registered only while music is playing. Android sends AUDIO_BECOMING_NOISY
+    // when wired headsets or Bluetooth A2DP audio devices are disconnected.
+    private boolean noisyReceiverRegistered = false;
+    private final BroadcastReceiver noisyAudioReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent != null && AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())
+                    && isActuallyPlaying()) {
+                // Pause immediately: do not fade audio out through the phone speaker.
+                pausePlaybackImmediately();
+            }
+        }
+    };
+
+    private void registerNoisyAudioReceiver() {
+        if (noisyReceiverRegistered) return;
+        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(noisyAudioReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(noisyAudioReceiver, filter);
+            }
+            noisyReceiverRegistered = true;
+        } catch (Exception ignored) { }
+    }
+
+    private void unregisterNoisyAudioReceiver() {
+        if (!noisyReceiverRegistered) return;
+        try { unregisterReceiver(noisyAudioReceiver); } catch (Exception ignored) { }
+        noisyReceiverRegistered = false;
+    }
 
     private final class CallStateCallback extends TelephonyCallback implements TelephonyCallback.CallStateListener {
         @Override public void onCallStateChanged(int state) { handleCallStateChanged(state); }
@@ -179,6 +213,7 @@ public class PlaybackService extends Service {
                     updateSession(false); updateNotification(false); broadcastState(false);
                     return;
                 }
+                registerNoisyAudioReceiver();
                 mp.start();
                 focusInterrupted = false;
                 externalAudioInterrupted = false;
@@ -376,6 +411,7 @@ public class PlaybackService extends Service {
 
     private void pausePlaybackImmediately() {
         cancelFade();
+        unregisterNoisyAudioReceiver();
         if (player != null && playerPrepared) {
             try {
                 if (player.isPlaying()) player.pause();
@@ -406,6 +442,7 @@ public class PlaybackService extends Service {
             if (!player.isPlaying()) {
                 currentVolume = 0.0f;
                 player.setVolume(0.0f, 0.0f);
+                registerNoisyAudioReceiver();
                 player.start();
                 fadeTo(1.0f, FADE_DURATION_MS, null);
             } else if (currentVolume < 1.0f) {
@@ -416,6 +453,7 @@ public class PlaybackService extends Service {
     }
     private void pausePlayback() {
         if (player == null || !playerPrepared) {
+            unregisterNoisyAudioReceiver();
             updateSession(false); updateNotification(false); broadcastState(false);
             return;
         }
@@ -426,11 +464,13 @@ public class PlaybackService extends Service {
                         if (player != null && playerPrepared && player.isPlaying()) player.pause();
                     } catch (IllegalStateException ignored) { }
                     currentVolume = 0.0f;
+                    unregisterNoisyAudioReceiver();
                     updateSession(false); updateNotification(false); broadcastState(false);
                 });
                 return;
             }
         } catch (IllegalStateException ignored) { }
+        unregisterNoisyAudioReceiver();
         updateSession(false); updateNotification(false); broadcastState(false);
     }
 
@@ -509,7 +549,7 @@ public class PlaybackService extends Service {
         i.putExtra("duration", duration).putExtra("position", position);
         sendBroadcast(i);
     }
-    private void releasePlayer() { cancelFade(); releaseVisualizer(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
+    private void releasePlayer() { unregisterNoisyAudioReceiver(); cancelFade(); releaseVisualizer(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
         cancelFade();
         if (telephonyManager != null) {
