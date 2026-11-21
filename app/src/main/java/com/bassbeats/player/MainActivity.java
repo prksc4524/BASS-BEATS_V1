@@ -119,42 +119,43 @@ public class MainActivity extends Activity {
  LinearLayout.LayoutParams rowParams(){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,dp(4),0,dp(4));return lp;}
  void eqScreen(){
   content.addView(text("EQUALIZER",21,WHITE,true));
+  android.content.SharedPreferences prefs=getSharedPreferences("audio_effects",MODE_PRIVATE);
   String[] names={"Custom","Normal","Rock","Pop","Jazz","Classical","Bass Heavy"};
   Spinner presets=new Spinner(this);
   presets.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,names));
   content.addView(presets);
-  LinearLayout bands=new LinearLayout(this); bands.setGravity(Gravity.CENTER); bands.setPadding(0,dp(8),0,dp(8));
   String[] freq={"31","62","125","250","500","1k","2k","4k","8k","16k"};
-  int[] levels=new int[10];
-  android.content.SharedPreferences prefs=getSharedPreferences("audio_effects",MODE_PRIVATE);
-  int[] defaultBassHeavy={5,7,5,2,0,-1,0,1,2,2};
-  if(!prefs.contains("band_0")){
-   android.content.SharedPreferences.Editor defaultEditor=prefs.edit();
-   for(int i=0;i<10;i++)defaultEditor.putInt("band_"+i,defaultBassHeavy[i]);
-   defaultEditor.apply();
-  }
-  for(int i=0;i<10;i++) levels[i]=Math.max(-8,Math.min(8,prefs.getInt("band_"+i,defaultBassHeavy[i])));
-  TextView[] dbLabels=new TextView[10]; SeekBar[] sliders=new SeekBar[10];
+  int[] defaults={5,7,5,2,0,-1,0,1,2,2};
+  if(!prefs.contains("band_0")){android.content.SharedPreferences.Editor e=prefs.edit();for(int i=0;i<10;i++)e.putInt("band_"+i,defaults[i]);e.apply();}
+  LinearLayout bands=new LinearLayout(this);bands.setGravity(Gravity.CENTER);bands.setPadding(0,dp(8),0,dp(8));
+  SeekBar[] sliders=new SeekBar[10];
   for(int i=0;i<10;i++){
-   final int bandIndex=i;
-   LinearLayout col=new LinearLayout(this); col.setOrientation(1); col.setGravity(Gravity.CENTER);
-   TextView db=text((levels[i]>0?"+":"")+levels[i],9,CYAN,true); db.setGravity(Gravity.CENTER); dbLabels[i]=db; col.addView(db,new LinearLayout.LayoutParams(-1,dp(20)));
-   FrameLayout track=new FrameLayout(this); track.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(205)));
-   SeekBar sb=new SeekBar(this); sb.setMax(16); sb.setProgress(Math.max(0,Math.min(16,levels[i]+8))); sb.setRotation(-90); sb.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN)); sb.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN)); sb.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(38,48,66)));
-   FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(dp(195),dp(30),Gravity.CENTER); track.addView(sb,sp); sliders[i]=sb; col.addView(track);
-   TextView label=text(freq[i],8,MUTED,false); label.setGravity(Gravity.CENTER); col.addView(label,new LinearLayout.LayoutParams(-1,dp(22)));
-   sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean fromUser){int value=progress-8;db.setText((value>0?"+":"")+value);if(fromUser){getSharedPreferences("audio_effects",MODE_PRIVATE).edit().putInt("band_"+bandIndex,value).apply();sendEffect(PlaybackService.EQ_BAND,"band",bandIndex,"level",value);}} public void onStartTrackingTouch(SeekBar b){} public void onStopTrackingTouch(SeekBar b){}});
-   bands.addView(col,new LinearLayout.LayoutParams(0,dp(250),1));
+   final int bi=i;int level=Math.max(-8,Math.min(8,prefs.getInt("band_"+i,defaults[i])));
+   LinearLayout col=new LinearLayout(this);col.setOrientation(1);col.setGravity(Gravity.CENTER);
+   TextView db=text((level>0?"+":"")+level,9,CYAN,true);db.setGravity(Gravity.CENTER);col.addView(db,new LinearLayout.LayoutParams(-1,dp(20)));
+   FrameLayout track=new FrameLayout(this);track.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(190)));
+   SeekBar sb=new SeekBar(this);sb.setMax(16);sb.setProgress(level+8);sb.setRotation(-90);sb.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));sb.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN));
+   track.addView(sb,new FrameLayout.LayoutParams(dp(180),dp(30),Gravity.CENTER));sliders[i]=sb;col.addView(track);
+   TextView label=text(freq[i],8,MUTED,false);label.setGravity(Gravity.CENTER);col.addView(label,new LinearLayout.LayoutParams(-1,dp(22)));
+   sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int p,boolean user){int v=p-8;db.setText((v>0?"+":"")+v);if(user){prefs.edit().putInt("band_"+bi,v).apply();sendEffect(PlaybackService.EQ_BAND,"band",bi,"level",v);}}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});
+   bands.addView(col,new LinearLayout.LayoutParams(0,dp(232),1));
   }
   content.addView(bands);
-  Switch bass=new Switch(this); bass.setText("Bass Boost"); bass.setTextColor(WHITE); bass.setButtonTintList(android.content.res.ColorStateList.valueOf(CYAN)); bass.setChecked(prefs.getBoolean("bass_enabled",false)); content.addView(bass);
-  content.addView(text("Intensity",13,MUTED,true)); SeekBar intensity=new SeekBar(this); intensity.setMax(100); intensity.setProgress(prefs.getInt("bass_strength",700)/10); intensity.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN)); intensity.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN)); content.addView(intensity);
-  Runnable applyBass=()->{sendBassEffect(bass.isChecked(),intensity.getProgress()*10);};
-  bass.setOnCheckedChangeListener((buttonView,isChecked)->{applyBass.run();}); intensity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int progress,boolean fromUser){if(fromUser)applyBass.run();}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});
-  presets.setSelection(6);
-  presets.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){boolean first=true;public void onNothingSelected(android.widget.AdapterView<?> p){} public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){if(first){first=false;return;} int[][] values={{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{5,4,2,-1,-2,1,3,4,5,5},{-1,1,4,5,2,-1,-1,1,3,4},{3,2,0,-2,-2,0,2,3,3,2},{4,3,1,0,-1,1,2,3,2,1},{5,7,5,2,0,-1,0,1,2,2}};android.content.SharedPreferences.Editor presetEditor=getSharedPreferences("audio_effects",MODE_PRIVATE).edit();for(int j=0;j<10;j++){sliders[j].setProgress(Math.max(0,Math.min(16,values[position][j]+8)));presetEditor.putInt("band_"+j,values[position][j]);sendEffect(PlaybackService.EQ_BAND,"band",j,"level",values[position][j]);}presetEditor.apply();}});
-  Button reset=button("↻  RESET",()->{android.content.SharedPreferences.Editor editor=getSharedPreferences("audio_effects",MODE_PRIVATE).edit();for(int j=0;j<10;j++){sliders[j].setProgress(8);editor.putInt("band_"+j,0);sendEffect(PlaybackService.EQ_BAND,"band",j,"level",0);}bass.setChecked(false);intensity.setProgress(0);editor.putBoolean("bass_enabled",false).putInt("bass_strength",0).apply();sendBassEffect(false,0);Toast.makeText(this,"Equalizer reset to Flat",Toast.LENGTH_SHORT).show();}); LinearLayout.LayoutParams resetLp=new LinearLayout.LayoutParams(-1,-2);resetLp.topMargin=dp(30);resetLp.bottomMargin=dp(14);content.addView(reset,resetLp);
-  content.addView(text("Changes apply to the current playback session when supported by your device.",11,MUTED,false));
+  Button save=button("＋  SAVE CUSTOM PRESET",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("Preset name");new AlertDialog.Builder(this).setTitle("Save current equalizer").setView(name).setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->{String n=name.getText().toString().trim();if(n.isEmpty()){Toast.makeText(this,"Enter a preset name",Toast.LENGTH_SHORT).show();return;}StringBuilder values=new StringBuilder();for(int i=0;i<10;i++){if(i>0)values.append(",");values.append(sliders[i].getProgress()-8);}prefs.edit().putString("custom_preset_"+n,values.toString()).apply();Toast.makeText(this,"Preset saved: "+n,Toast.LENGTH_SHORT).show();}).show();});
+  save.setAllCaps(false);content.addView(save);
+  Button load=button("LOAD SAVED PRESET",()->{java.util.ArrayList<String> saved=new java.util.ArrayList<>();for(Map.Entry<String,?> e:prefs.getAll().entrySet())if(e.getKey().startsWith("custom_preset_"))saved.add(e.getKey().substring(14));if(saved.isEmpty()){Toast.makeText(this,"No saved presets yet",Toast.LENGTH_SHORT).show();return;}String[] list=saved.toArray(new String[0]);new AlertDialog.Builder(this).setTitle("Your custom presets").setItems(list,(d,which)->{String raw=prefs.getString("custom_preset_"+list[which],"");String[] vals=raw.split(",");android.content.SharedPreferences.Editor ed=prefs.edit();for(int i=0;i<10&&i<vals.length;i++)try{int v=Math.max(-8,Math.min(8,Integer.parseInt(vals[i])));sliders[i].setProgress(v+8);ed.putInt("band_"+i,v);sendEffect(PlaybackService.EQ_BAND,"band",i,"level",v);}catch(Exception ignored){}ed.apply();Toast.makeText(this,"Loaded "+list[which],Toast.LENGTH_SHORT).show();}).setNeutralButton("Delete",(d,w)->{new AlertDialog.Builder(this).setTitle("Delete preset").setItems(list,(dd,which)->{prefs.edit().remove("custom_preset_"+list[which]).apply();Toast.makeText(this,"Preset deleted",Toast.LENGTH_SHORT).show();}).show();}).show();});
+  load.setAllCaps(false);content.addView(load);
+  Switch bass=new Switch(this);bass.setText("Bass Boost");bass.setTextColor(WHITE);bass.setChecked(prefs.getBoolean("bass_enabled",false));content.addView(bass);
+  content.addView(text("Bass intensity",13,MUTED,true));SeekBar intensity=new SeekBar(this);intensity.setMax(100);intensity.setProgress(prefs.getInt("bass_strength",700)/10);intensity.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));content.addView(intensity);
+  Runnable applyBass=()->sendBassEffect(bass.isChecked(),intensity.getProgress()*10);bass.setOnCheckedChangeListener((v,on)->applyBass.run());intensity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int p,boolean u){if(u)applyBass.run();}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});
+  Switch virtualizer=new Switch(this);virtualizer.setText("Virtualizer · 3D Audio");virtualizer.setTextColor(WHITE);virtualizer.setChecked(prefs.getBoolean("virtualizer_enabled",false));content.addView(virtualizer);
+  content.addView(text("Virtualizer strength",13,MUTED,true));SeekBar vStrength=new SeekBar(this);vStrength.setMax(100);vStrength.setProgress(prefs.getInt("virtualizer_strength",500)/10);vStrength.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));content.addView(vStrength);
+  Runnable applyVirtualizer=()->{Intent x=new Intent(this,PlaybackService.class);x.setAction(PlaybackService.EQ_VIRTUALIZER);x.putExtra("enabled",virtualizer.isChecked());x.putExtra("strength",vStrength.getProgress()*10);if(Build.VERSION.SDK_INT>=26)startForegroundService(x);else startService(x);};
+  virtualizer.setOnCheckedChangeListener((v,on)->applyVirtualizer.run());vStrength.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int p,boolean u){if(u)applyVirtualizer.run();}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});
+  presets.setSelection(6);presets.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){boolean first=true;public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){if(first){first=false;return;}int[][] values={{0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0},{5,4,2,-1,-2,1,3,4,5,5},{-1,1,4,5,2,-1,-1,1,3,4},{3,2,0,-2,-2,0,2,3,3,2},{4,3,1,0,-1,1,2,3,2,1},{5,7,5,2,0,-1,0,1,2,2}};android.content.SharedPreferences.Editor ed=prefs.edit();for(int j=0;j<10;j++){sliders[j].setProgress(values[pos][j]+8);ed.putInt("band_"+j,values[pos][j]);sendEffect(PlaybackService.EQ_BAND,"band",j,"level",values[pos][j]);}ed.apply();}});
+  Button reset=button("↻  RESET",()->{android.content.SharedPreferences.Editor ed=prefs.edit();for(int j=0;j<10;j++){sliders[j].setProgress(8);ed.putInt("band_"+j,0);sendEffect(PlaybackService.EQ_BAND,"band",j,"level",0);}bass.setChecked(false);intensity.setProgress(0);virtualizer.setChecked(false);vStrength.setProgress(0);ed.putBoolean("bass_enabled",false).putInt("bass_strength",0).putBoolean("virtualizer_enabled",false).putInt("virtualizer_strength",0).apply();sendBassEffect(false,0);applyVirtualizer.run();Toast.makeText(this,"Audio effects reset",Toast.LENGTH_SHORT).show();});
+  LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.topMargin=dp(18);content.addView(reset,rp);
+  content.addView(text("Effects depend on Android device and audio output support.",11,MUTED,false));
  }
  void sendEffect(String action,String key1,int value1,String key2,int value2){Intent x=new Intent(this,PlaybackService.class);x.setAction(action);x.putExtra(key1,value1);x.putExtra(key2,value2);startService(x);}
  void sendBassEffect(boolean enabled,int strength){Intent x=new Intent(this,PlaybackService.class);x.setAction(PlaybackService.EQ_BASS);x.putExtra("enabled",enabled);x.putExtra("strength",strength);if(Build.VERSION.SDK_INT>=26)startForegroundService(x);else startService(x);}
