@@ -453,6 +453,7 @@ public class PlaybackService extends Service {
     }
     private void pausePlayback() {
         if (player == null || !playerPrepared) {
+            unregisterNoisyAudioReceiver();
             updateSession(false); updateNotification(false); broadcastState(false);
             return;
         }
