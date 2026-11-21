@@ -134,26 +134,26 @@ public class MainActivity extends Activity {
   String[] freq={"31","62","125","250","500","1k","2k","4k","8k","16k"};int[] defaults={5,7,5,2,0,-1,0,1,2,2};
   if(!prefs.contains("band_0")){android.content.SharedPreferences.Editor e=prefs.edit();for(int i=0;i<10;i++)e.putInt("band_"+i,defaults[i]);e.apply();}
   LinearLayout eqCard=new LinearLayout(this);eqCard.setOrientation(1);eqCard.setPadding(dp(5),dp(14),dp(5),dp(12));eqCard.setBackground(round(Color.rgb(13,19,34),dp(22)));
-  TextView heading=text("10-BAND EQUALIZER",12,WHITE,true);LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,-2);hp.leftMargin=dp(7);hp.bottomMargin=dp(8);eqCard.addView(heading,hp);
+  LinearLayout headingRow=new LinearLayout(this);headingRow.setGravity(Gravity.CENTER_VERTICAL);TextView heading=text("10-BAND EQUALIZER",12,WHITE,true);headingRow.addView(heading,new LinearLayout.LayoutParams(0,-2,1));TextView reset=new TextView(this);reset.setText("↻ Reset");reset.setTextColor(CYAN);reset.setTextSize(11);reset.setTypeface(Typeface.DEFAULT,Typeface.BOLD);reset.setPadding(dp(8),dp(5),dp(8),dp(5));reset.setBackground(round(Color.rgb(25,39,65),dp(14)));reset.setOnClickListener(v->{android.content.SharedPreferences.Editor ed=prefs.edit();for(int j=0;j<10;j++){sliders[j].setLevel(0);ed.putInt("band_"+j,0);sendEffect(PlaybackService.EQ_BAND,"band",j,"level",0);}bass.setChecked(false);intensity.setProgress(0);ed.putBoolean("bass_enabled",false).putInt("bass_strength",0).putInt("selected_preset",0).apply();sendBassEffect(false,0);for(int k=0;k<7;k++)presetButtons[k].setBackground(round(k==0?Color.rgb(48,39,91):Color.rgb(24,31,49),dp(18)));Toast.makeText(this,"Equalizer reset to 0 dB",Toast.LENGTH_SHORT).show();});headingRow.addView(reset);LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,-2);hp.leftMargin=dp(7);hp.rightMargin=dp(5);hp.bottomMargin=dp(5);eqCard.addView(headingRow,hp);
   LinearLayout bands=new LinearLayout(this);bands.setGravity(Gravity.CENTER);VerticalEqSlider[] sliders=new VerticalEqSlider[10];
   for(int i=0;i<10;i++){
    final int bi=i;int level=Math.max(-12,Math.min(12,prefs.getInt("band_"+i,defaults[i])));
    LinearLayout col=new LinearLayout(this);col.setOrientation(1);col.setGravity(Gravity.CENTER_HORIZONTAL);
    TextView label=text(freq[i],10,MUTED,true);label.setGravity(Gravity.CENTER);col.addView(label,new LinearLayout.LayoutParams(-1,dp(20)));
-   TextView unit=text("Hz",8,MUTED,false);unit.setGravity(Gravity.CENTER);col.addView(unit,new LinearLayout.LayoutParams(-1,dp(13)));
+   
    TextView db=text((level>0?"+":"")+level,9,CYAN,true);db.setGravity(Gravity.CENTER);col.addView(db,new LinearLayout.LayoutParams(-1,dp(23)));
    VerticalEqSlider slider=new VerticalEqSlider(this);slider.setLevel(level);slider.setOnLevelChanged(v->{db.setText((v>0?"+":"")+v);prefs.edit().putInt("band_"+bi,v).apply();if(power.isChecked())sendEffect(PlaybackService.EQ_BAND,"band",bi,"level",v);});sliders[i]=slider;
-   col.addView(slider,new LinearLayout.LayoutParams(-1,dp(190)));
-   TextView range=text("-12  0  +12",7,MUTED,false);range.setGravity(Gravity.CENTER);col.addView(range,new LinearLayout.LayoutParams(-1,dp(16)));
+   TextView topRange=text("+12",7,MUTED,false);topRange.setGravity(Gravity.CENTER);col.addView(topRange,new LinearLayout.LayoutParams(-1,dp(12)));col.addView(slider,new LinearLayout.LayoutParams(-1,dp(174)));
+   TextView bottomRange=text("-12",7,MUTED,false);bottomRange.setGravity(Gravity.CENTER);col.addView(bottomRange,new LinearLayout.LayoutParams(-1,dp(12)));
    LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1f);cp.leftMargin=dp(0);cp.rightMargin=dp(0);bands.addView(col,cp);
   }
   eqCard.addView(bands);content.addView(eqCard);
   String[] names={"Flat","Deep","Vocal","Electronic","Rock","Jazz","Classical"};
   int[][] values={{0,0,0,0,0,0,0,0,0,0},{5,7,5,2,0,-1,0,1,2,2},{-2,-1,1,3,4,3,1,0,-1,-2},{2,3,1,-1,-2,0,2,4,5,4},{4,3,1,-2,-3,1,3,4,4,3},{3,2,0,-2,-2,0,2,3,3,2},{4,3,1,0,-1,1,2,3,2,1}};
-  LinearLayout presetCard=new LinearLayout(this);presetCard.setOrientation(1);presetCard.setPadding(dp(14),dp(12),dp(14),dp(12));presetCard.setBackground(round(Color.rgb(14,21,38),dp(18)));presetCard.addView(text("PRESETS",12,WHITE,true));
-  LinearLayout[] presetRows={new LinearLayout(this),new LinearLayout(this)};for(LinearLayout row:presetRows){row.setGravity(Gravity.CENTER);row.setPadding(0,dp(7),0,dp(2));presetCard.addView(row);}
+  LinearLayout presetCard=new LinearLayout(this);presetCard.setOrientation(1);presetCard.setPadding(dp(12),dp(7),dp(12),dp(7));presetCard.setBackground(round(Color.rgb(14,21,38),dp(18)));presetCard.addView(text("PRESETS",12,WHITE,true));
+  LinearLayout[] presetRows={new LinearLayout(this),new LinearLayout(this)};for(LinearLayout row:presetRows){row.setGravity(Gravity.CENTER);row.setPadding(0,dp(2),0,dp(1));presetCard.addView(row);}
   Button[] presetButtons=new Button[7];int selected=prefs.getInt("selected_preset",1);
-  for(int i=0;i<7;i++){final int pi=i;Button chip=new Button(this);chip.setAllCaps(false);chip.setText(names[i]);chip.setTextSize(11);chip.setTextColor(Color.WHITE);chip.setMinHeight(dp(38));chip.setMinimumHeight(dp(38));chip.setPadding(dp(4),0,dp(4),0);chip.setBackground(round(i==selected?Color.rgb(48,39,91):Color.rgb(24,31,49),dp(22)));presetButtons[i]=chip;LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(0,dp(42),1);pp.leftMargin=dp(3);pp.rightMargin=dp(3);presetRows[i<4?0:1].addView(chip,pp);chip.setOnClickListener(v->{prefs.edit().putInt("selected_preset",pi).apply();for(int k=0;k<7;k++)presetButtons[k].setBackground(round(k==pi?Color.rgb(48,39,91):Color.rgb(24,31,49),dp(22)));android.content.SharedPreferences.Editor ed=prefs.edit();for(int j=0;j<10;j++){sliders[j].setLevel(values[pi][j]);ed.putInt("band_"+j,values[pi][j]);if(power.isChecked())sendEffect(PlaybackService.EQ_BAND,"band",j,"level",values[pi][j]);}ed.apply();});}
+  for(int i=0;i<7;i++){final int pi=i;Button chip=new Button(this);chip.setAllCaps(false);chip.setText(names[i]);chip.setTextSize(10);chip.setTextColor(Color.WHITE);chip.setMinHeight(dp(30));chip.setMinimumHeight(dp(30));chip.setPadding(dp(2),0,dp(2),0);chip.setBackground(round(i==selected?Color.rgb(48,39,91):Color.rgb(24,31,49),dp(18)));presetButtons[i]=chip;LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(0,dp(34),1);pp.leftMargin=dp(3);pp.rightMargin=dp(3);presetRows[i<4?0:1].addView(chip,pp);chip.setOnClickListener(v->{prefs.edit().putInt("selected_preset",pi).apply();for(int k=0;k<7;k++)presetButtons[k].setBackground(round(k==pi?Color.rgb(48,39,91):Color.rgb(24,31,49),dp(22)));android.content.SharedPreferences.Editor ed=prefs.edit();for(int j=0;j<10;j++){sliders[j].setLevel(values[pi][j]);ed.putInt("band_"+j,values[pi][j]);if(power.isChecked())sendEffect(PlaybackService.EQ_BAND,"band",j,"level",values[pi][j]);}ed.apply();});}
   content.addView(presetCard);
   LinearLayout bassCard=new LinearLayout(this);bassCard.setOrientation(1);bassCard.setPadding(dp(15),dp(12),dp(15),dp(12));bassCard.setBackground(round(Color.rgb(14,21,38),dp(18)));
   LinearLayout bassRow=new LinearLayout(this);bassRow.setGravity(Gravity.CENTER_VERTICAL);bassRow.addView(text("◉   Bass Boost",15,WHITE,true),new LinearLayout.LayoutParams(0,-2,1));Switch bass=new Switch(this);bass.setChecked(prefs.getBoolean("bass_enabled",false));bassRow.addView(bass);bassCard.addView(bassRow);
@@ -161,9 +161,7 @@ public class MainActivity extends Activity {
   Runnable applyBass=()->sendBassEffect(bass.isChecked(),intensity.getProgress()*10);bass.setOnCheckedChangeListener((v,on)->{prefs.edit().putBoolean("bass_enabled",on).apply();applyBass.run();});intensity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar v,int p,boolean user){if(user){prefs.edit().putInt("bass_strength",p*10).apply();applyBass.run();}}public void onStartTrackingTouch(SeekBar v){}public void onStopTrackingTouch(SeekBar v){}});
   content.addView(bassCard);
   power.setOnCheckedChangeListener((v,on)->{prefs.edit().putBoolean("eq_enabled",on).apply();for(int j=0;j<10;j++)sendEffect(PlaybackService.EQ_BAND,"band",j,"level",on?sliders[j].getLevel():0);});
-  TextView reset=new TextView(this);reset.setText("↻    RESET ALL");reset.setTextColor(Color.WHITE);reset.setTextSize(15);reset.setTypeface(Typeface.DEFAULT,Typeface.BOLD);reset.setGravity(Gravity.CENTER);reset.setPadding(dp(12),dp(15),dp(12),dp(15));reset.setBackground(round(Color.rgb(29,48,83),dp(18)));reset.setElevation(dp(4));reset.setClickable(true);
-  reset.setOnClickListener(v->{android.content.SharedPreferences.Editor ed=prefs.edit();for(int j=0;j<10;j++){sliders[j].setLevel(0);ed.putInt("band_"+j,0);sendEffect(PlaybackService.EQ_BAND,"band",j,"level",0);}bass.setChecked(false);intensity.setProgress(0);ed.putBoolean("bass_enabled",false).putInt("bass_strength",0).putInt("selected_preset",0).apply();sendBassEffect(false,0);for(int k=0;k<7;k++)presetButtons[k].setBackground(round(k==0?Color.rgb(48,39,91):Color.rgb(24,31,49),dp(22)));Toast.makeText(this,"Equalizer reset to 0 dB",Toast.LENGTH_SHORT).show();});
-  LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.topMargin=dp(16);rp.bottomMargin=dp(20);content.addView(reset,rp);
+
  }
  class VerticalEqSlider extends View {
   private final android.graphics.Paint paint=new android.graphics.Paint(3);private int level=0;private java.util.function.IntConsumer listener;
@@ -173,8 +171,8 @@ public class MainActivity extends Activity {
   void setLevel(int v){level=Math.max(-12,Math.min(12,v));invalidate();}
   protected void onDraw(android.graphics.Canvas canvas){super.onDraw(canvas);float cx=getWidth()/2f,top=dp(10),bottom=getHeight()-dp(10),mid=(top+bottom)/2f;
    paint.setStyle(android.graphics.Paint.Style.FILL);paint.setColor(Color.rgb(27,36,56));canvas.drawRoundRect(cx-dp(5),top,cx+dp(5),bottom,dp(5),dp(5),paint);
-   paint.setColor(Color.rgb(105,119,151));canvas.drawRoundRect(cx-dp(8),mid-dp(1.2f),cx+dp(8),mid+dp(1.2f),dp(2),dp(2),paint);
-   for(int t=-12;t<=12;t+=3){float yy=mid-(t/12f)*(bottom-top)/2f;paint.setColor(t==0?Color.rgb(105,119,151):Color.rgb(48,59,82));canvas.drawRect(cx-dp(t==0?12:3),yy-dp(1),cx+dp(t==0?12:3),yy+dp(1),paint);}
+   paint.setColor(Color.rgb(105,119,151));canvas.drawRoundRect(cx-dp(4),mid-dp(1),cx+dp(4),mid+dp(1),dp(1),dp(1),paint);
+   
    float y=mid-(level/12f)*(bottom-top)/2f;
    paint.setColor(Color.rgb(42,125,255));if(level>=0)canvas.drawRoundRect(cx-dp(2),y,cx+dp(2),mid,dp(2),dp(2),paint);else canvas.drawRoundRect(cx-dp(2),mid,cx+dp(2),y,dp(2),dp(2),paint);
    paint.setShadowLayer(dp(10),0,0,Color.rgb(137,83,255));paint.setColor(Color.rgb(165,112,255));canvas.drawRoundRect(cx-dp(14),y-dp(17),cx+dp(14),y+dp(17),dp(8),dp(8),paint);paint.clearShadowLayer();
