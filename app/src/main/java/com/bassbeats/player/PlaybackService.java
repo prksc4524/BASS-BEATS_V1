@@ -70,7 +70,11 @@ public class PlaybackService extends Service {
     private boolean wasPlayingBeforeCall = false;
     private TelephonyManager telephonyManager;
     private PhoneStateListener phoneStateListener;
-    private TelephonyCallback callStateCallback;
+    private CallStateCallback callStateCallback;
+
+    private final class CallStateCallback extends TelephonyCallback implements TelephonyCallback.CallStateListener {
+        @Override public void onCallStateChanged(int state) { handleCallStateChanged(state); }
+    }
 
     @Override public void onCreate() {
         super.onCreate();
@@ -335,11 +339,7 @@ public class PlaybackService extends Service {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (callStateCallback != null) return;
-                callStateCallback = new TelephonyCallback() implements TelephonyCallback.CallStateListener {
-                    @Override public void onCallStateChanged(int state) {
-                        handleCallStateChanged(state);
-                    }
-                };
+                callStateCallback = new CallStateCallback();
                 telephonyManager.registerTelephonyCallback(getMainExecutor(), callStateCallback);
             } else {
                 if (phoneStateListener != null) return;
