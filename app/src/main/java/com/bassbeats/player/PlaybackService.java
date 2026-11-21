@@ -10,6 +10,7 @@ import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
+import android.telephony.TelephonyCallback;
 import android.content.Context;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.BassBoost;
@@ -69,6 +70,7 @@ public class PlaybackService extends Service {
     private boolean wasPlayingBeforeCall = false;
     private TelephonyManager telephonyManager;
     private PhoneStateListener phoneStateListener;
+    private TelephonyCallback callStateCallback;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -143,6 +145,7 @@ public class PlaybackService extends Service {
     }
 
     private void startTrack(Intent intent) {
+        registerPhoneStateListener();
         if (intent.hasExtra("repeat_mode")) repeatMode = Math.max(0, Math.min(2, intent.getIntExtra("repeat_mode", repeatMode)));
         if (intent.hasExtra("queue_uris")) {
             queueUris = intent.getStringArrayExtra("queue_uris");
@@ -324,35 +327,64 @@ public class PlaybackService extends Service {
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
 
-    @SuppressWarnings("deprecation")
     private void registerPhoneStateListener() {
         if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
         try {
             telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
             if (telephonyManager == null) return;
-            phoneStateListener = new PhoneStateListener() {
-                @Override public void onCallStateChanged(int state, String phoneNumber) {
-                    if (state == TelephonyManager.CALL_STATE_RINGING || state == TelephonyManager.CALL_STATE_OFFHOOK) {
-                        if (!callInProgress) {
-                            boolean playingBeforeInterruption = isActuallyPlaying() || focusInterrupted;
-                            wasPlayingBeforeCall = playingBeforeInterruption;
-                            pausedForCall = playingBeforeInterruption;
-                            externalAudioInterrupted = false;
-                        }
-                        callInProgress = true;
-                        if (isActuallyPlaying()) pausePlayback();
-                    } else if (state == TelephonyManager.CALL_STATE_IDLE) {
-                        boolean shouldResume = callInProgress && pausedForCall && wasPlayingBeforeCall && !externalAudioInterrupted;
-                        callInProgress = false;
-                        pausedForCall = false;
-                        wasPlayingBeforeCall = false;
-                        focusInterrupted = false;
-                        if (shouldResume && player != null && playerPrepared) resumePlayback();
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (callStateCallback != null) return;
+                callStateCallback = new TelephonyCallback() implements TelephonyCallback.CallStateListener {
+                    @Override public void onCallStateChanged(int state) {
+                        handleCallStateChanged(state);
                     }
-                }
-            };
-            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+                };
+                telephonyManager.registerTelephonyCallback(getMainExecutor(), callStateCallback);
+            } else {
+                if (phoneStateListener != null) return;
+                phoneStateListener = new PhoneStateListener() {
+                    @Override public void onCallStateChanged(int state, String phoneNumber) {
+                        handleCallStateChanged(state);
+                    }
+                };
+                telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+            }
         } catch (SecurityException ignored) { }
+    }
+
+    private void handleCallStateChanged(int state) {
+        if (state == TelephonyManager.CALL_STATE_RINGING || state == TelephonyManager.CALL_STATE_OFFHOOK) {
+            if (!callInProgress) {
+                boolean playingNow = isActuallyPlaying();
+                wasPlayingBeforeCall = playingNow;
+                pausedForCall = playingNow;
+                // If playback is active, it was resumed by the user after any earlier interruption.
+                if (playingNow) externalAudioInterrupted = false;
+            }
+            callInProgress = true;
+            if (isActuallyPlaying()) pausePlaybackImmediately();
+        } else if (state == TelephonyManager.CALL_STATE_IDLE) {
+            boolean shouldResume = callInProgress && pausedForCall && wasPlayingBeforeCall && !externalAudioInterrupted;
+            callInProgress = false;
+            pausedForCall = false;
+            wasPlayingBeforeCall = false;
+            focusInterrupted = false;
+            if (shouldResume && player != null && playerPrepared) resumePlayback();
+        }
+    }
+
+    private void pausePlaybackImmediately() {
+        cancelFade();
+        if (player != null && playerPrepared) {
+            try {
+                if (player.isPlaying()) player.pause();
+            } catch (IllegalStateException ignored) { }
+        }
+        currentVolume = 0.0f;
+        updateSession(false);
+        updateNotification(false);
+        broadcastState(false);
     }
 
     private void togglePlayback() {
@@ -480,8 +512,16 @@ public class PlaybackService extends Service {
     private void releasePlayer() { cancelFade(); releaseVisualizer(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
         cancelFade();
-        if (telephonyManager != null && phoneStateListener != null) {
-            try { telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE); } catch (Exception ignored) { }
+        if (telephonyManager != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && callStateCallback != null) {
+                    telephonyManager.unregisterTelephonyCallback(callStateCallback);
+                    callStateCallback = null;
+                } else if (phoneStateListener != null) {
+                    telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
+                    phoneStateListener = null;
+                }
+            } catch (Exception ignored) { }
         }
         if (audioManager != null && focusChangeListener != null) {
             try { audioManager.abandonAudioFocus(focusChangeListener); } catch (Exception ignored) { }
