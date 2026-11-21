@@ -165,10 +165,9 @@ public class MainActivity extends Activity {
   content.addView(text("Drag each slider up or down to adjust from -12 dB to +12 dB.",11,MUTED,false));
  }
  class VerticalEqSlider extends View {
-  interface Listener { void changed(int value); }
-  private final android.graphics.Paint paint=new android.graphics.Paint(3);private int level=0;private Listener listener;
+  private final android.graphics.Paint paint=new android.graphics.Paint(3);private int level=0;private java.util.function.IntConsumer listener;
   VerticalEqSlider(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);setFocusable(true);}
-  void setOnLevelChanged(Listener l){listener=l;}
+  void setOnLevelChanged(java.util.function.IntConsumer l){listener=l;}
   int getLevel(){return level;}
   void setLevel(int v){level=Math.max(-12,Math.min(12,v));invalidate();}
   protected void onDraw(android.graphics.Canvas canvas){super.onDraw(canvas);float cx=getWidth()/2f,top=dp(12),bottom=getHeight()-dp(12),mid=(top+bottom)/2f;float half=dp(8);
@@ -178,7 +177,7 @@ public class MainActivity extends Activity {
    paint.setShadowLayer(dp(9),0,0,Color.rgb(137,83,255));paint.setColor(Color.rgb(165,112,255));canvas.drawRoundRect(cx-dp(11),y-dp(14),cx+dp(11),y+dp(14),dp(7),dp(7),paint);paint.clearShadowLayer();
    paint.setColor(Color.WHITE);canvas.drawRoundRect(cx-dp(6),y-dp(2),cx+dp(6),y+dp(2),dp(2),dp(2),paint);
   }
-  public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_DOWN||e.getAction()==MotionEvent.ACTION_MOVE){float top=dp(12),bottom=getHeight()-dp(12),mid=(top+bottom)/2f;float f=1f-2f*((e.getY()-top)/(bottom-top));int n=Math.max(-12,Math.min(12,Math.round(f*12)));if(n!=level){level=n;invalidate();if(listener!=null)listener.changed(level);}getParent().requestDisallowInterceptTouchEvent(true);return true;}if(e.getAction()==MotionEvent.ACTION_UP){performClick();return true;}return true;}
+  public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_DOWN||e.getAction()==MotionEvent.ACTION_MOVE){float top=dp(12),bottom=getHeight()-dp(12),mid=(top+bottom)/2f;float f=1f-2f*((e.getY()-top)/(bottom-top));int n=Math.max(-12,Math.min(12,Math.round(f*12)));if(n!=level){level=n;invalidate();if(listener!=null)listener.accept(level);}getParent().requestDisallowInterceptTouchEvent(true);return true;}if(e.getAction()==MotionEvent.ACTION_UP){performClick();return true;}return true;}
   public boolean performClick(){super.performClick();return true;}
  }
  void sendEffect(String action,String key1,int value1,String key2,int value2){Intent x=new Intent(this,PlaybackService.class);x.setAction(action);x.putExtra(key1,value1);x.putExtra(key2,value2);startService(x);}
