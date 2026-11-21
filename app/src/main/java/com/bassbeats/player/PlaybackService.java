@@ -16,6 +16,7 @@ import android.telephony.TelephonyCallback;
 import android.content.Context;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.BassBoost;
+import android.media.audiofx.Virtualizer;
 import android.media.audiofx.Visualizer;
 import android.media.MediaPlayer;
 import android.media.MediaMetadata;
@@ -35,6 +36,7 @@ public class PlaybackService extends Service {
     public static final String PREV = "com.bassbeats.player.PREV";
     public static final String EQ_BAND = "com.bassbeats.player.EQ_BAND";
     public static final String EQ_BASS = "com.bassbeats.player.EQ_BASS";
+    public static final String EQ_VIRTUALIZER = "com.bassbeats.player.EQ_VIRTUALIZER";
     public static final String STATE = "com.bassbeats.player.STATE";
     public static final String GET_STATE = "com.bassbeats.player.GET_STATE";
     public static final String SEEK = "com.bassbeats.player.SEEK";
@@ -49,6 +51,7 @@ public class PlaybackService extends Service {
     private MediaSession session;
     private Equalizer equalizer;
     private BassBoost bassBoost;
+    private Virtualizer virtualizer;
     private Visualizer visualizer;
     private boolean playerPrepared = false;
     private final Handler fadeHandler = new Handler(Looper.getMainLooper());
@@ -178,6 +181,11 @@ public class PlaybackService extends Service {
             int strength = intent.getIntExtra("strength", 700);
             getSharedPreferences("audio_effects", MODE_PRIVATE).edit().putBoolean("bass_enabled", enabled).putInt("bass_strength", strength).apply();
             applyBass(enabled, strength);
+        } else if (EQ_VIRTUALIZER.equals(action)) {
+            boolean enabled = intent.getBooleanExtra("enabled", false);
+            int strength = intent.getIntExtra("strength", 500);
+            getSharedPreferences("audio_effects", MODE_PRIVATE).edit().putBoolean("virtualizer_enabled", enabled).putInt("virtualizer_strength", strength).apply();
+            applyVirtualizer(enabled, strength);
         }
         return START_NOT_STICKY;
     }
@@ -295,6 +303,13 @@ public class PlaybackService extends Service {
             bassBoost.setStrength((short) Math.max(0, Math.min(1000, strength)));
             bassBoost.setEnabled(enabled);
         } catch (Exception ignored) { if (bassBoost != null) { try { bassBoost.release(); } catch (Exception e) {} bassBoost = null; } }
+        try {
+            virtualizer = new Virtualizer(0, audioSessionId);
+            boolean enabled = getSharedPreferences("audio_effects", MODE_PRIVATE).getBoolean("virtualizer_enabled", false);
+            int strength = getSharedPreferences("audio_effects", MODE_PRIVATE).getInt("virtualizer_strength", 500);
+            virtualizer.setStrength((short)Math.max(0, Math.min(1000, strength)));
+            virtualizer.setEnabled(enabled);
+        } catch (Exception ignored) { if (virtualizer != null) { try { virtualizer.release(); } catch (Exception e) {} virtualizer = null; } }
     }
 
     private void initVisualizer(int audioSessionId) {
@@ -348,9 +363,15 @@ public class PlaybackService extends Service {
         try { bassBoost.setStrength((short) Math.max(0, Math.min(1000, strength))); bassBoost.setEnabled(enabled); } catch (Exception ignored) { }
     }
 
+    private void applyVirtualizer(boolean enabled, int strength) {
+        if (virtualizer == null) return;
+        try { virtualizer.setStrength((short)Math.max(0, Math.min(1000, strength))); virtualizer.setEnabled(enabled); } catch (Exception ignored) { }
+    }
+
     private void releaseAudioEffects() {
         if (equalizer != null) { try { equalizer.setEnabled(false); equalizer.release(); } catch (Exception ignored) { } equalizer = null; }
         if (bassBoost != null) { try { bassBoost.setEnabled(false); bassBoost.release(); } catch (Exception ignored) { } bassBoost = null; }
+        if (virtualizer != null) { try { virtualizer.setEnabled(false); virtualizer.release(); } catch (Exception ignored) { } virtualizer = null; }
     }
 
     private boolean isActuallyPlaying() {
