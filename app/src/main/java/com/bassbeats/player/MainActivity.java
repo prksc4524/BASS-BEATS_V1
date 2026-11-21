@@ -207,14 +207,20 @@ void updateArtwork(){
    int count=levels.length;
    for(int i=0;i<count;i++){
     int from=(int)((long)i*data.length/count),to=Math.max(from+1,(int)((long)(i+1)*data.length/count));
-    float sum=0f;int samples=0;
-    for(int j=from;j<to&&j<data.length;j++){sum+=((data[j]&0xff)-128)/128f;samples++;}
-    float average=samples==0?0f:sum/samples;
-    raw[i]=Math.max(-.48f,Math.min(.48f,average*1.45f));
+    float sum=0f,energy=0f,peak=0f;int samples=0;
+    for(int j=from;j<to&&j<data.length;j++){
+     float sample=((data[j]&0xff)-128)/128f;
+     sum+=sample;energy+=sample*sample;peak=Math.max(peak,Math.abs(sample));samples++;
+    }
+    float rms=samples==0?0f:(float)Math.sqrt(energy/samples);
+    float mean=samples==0?0f:sum/samples;
+    float sign=mean<0f?-1f:1f;
+    float magnitude=Math.max(rms*.95f,peak*.42f);
+    raw[i]=sign*Math.min(.72f,magnitude*2.15f);
    }
    for(int i=0;i<count;i++){
     float smooth=raw[Math.max(0,i-2)]*.08f+raw[Math.max(0,i-1)]*.22f+raw[i]*.40f+raw[Math.min(count-1,i+1)]*.22f+raw[Math.min(count-1,i+2)]*.08f;
-    levels[i]=levels[i]*.72f+smooth*.28f;
+    levels[i]=levels[i]*.48f+smooth*.52f;
    }
    postInvalidateOnAnimation();
   }
