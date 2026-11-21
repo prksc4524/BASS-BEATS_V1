@@ -178,6 +178,7 @@ public class PlaybackService extends Service {
             int strength = intent.getIntExtra("strength", 700);
             getSharedPreferences("audio_effects", MODE_PRIVATE).edit().putBoolean("bass_enabled", enabled).putInt("bass_strength", strength).apply();
             applyBass(enabled, strength);
+        }
 
         return START_NOT_STICKY;
     }
