@@ -75,7 +75,7 @@ jobs:
         if: ${{ env.BASS_KEYSTORE_BASE64 != '' && env.BASS_STORE_PASSWORD != '' && env.BASS_KEY_ALIAS != '' && env.BASS_KEY_PASSWORD != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: BASS-BEATS-2.0-SIGNED-RELEASE
+          name: BASS-BEATS-2.1-SIGNED-RELEASE
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
