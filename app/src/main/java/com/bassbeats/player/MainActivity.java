@@ -261,7 +261,8 @@ public class MainActivity extends Activity {
   BassVisualizerView(Context c){super(c);setBackgroundColor(Color.BLACK);}
   void setFftData(byte[] fft,int samplingRate){
    if(fft==null||fft.length<8)return;
-   float binHz=Math.max(1f,(samplingRate>0?samplingRate:44100)/1000f/fft.length);
+   // Android Visualizer reports samplingRate in milli-Hz; FFT bins span 0..Nyquist.
+   float binHz=Math.max(1f,(samplingRate>0?samplingRate:44100000)/1000f/fft.length);
    int maxBin=Math.max(1,(fft.length-1)/2);
    float[] centers={31f,62f,125f,250f,500f,1000f,2000f,4000f,8000f,16000f};
    for(int band=0;band<centers.length;band++){
@@ -270,51 +271,49 @@ public class MainActivity extends Activity {
     int first=Math.max(1,(int)Math.floor(low/binHz));
     int last=Math.min(maxBin,(int)Math.ceil(high/binHz));
     if(last<first)first=last=Math.max(1,Math.min(maxBin,Math.round(centers[band]/binHz)));
-    float sum=0;int count=0;
+    float power=0;int count=0;
     for(int bin=first;bin<=last;bin++){
      int re=fft[bin*2],im=fft[bin*2+1];
-     float magnitude=(float)Math.sqrt(re*re+im*im);
-     sum+=magnitude;count++;
+     power+=re*re+im*im;count++;
     }
-    float magnitude=count==0?0:sum/count;
-    float value=Math.min(1f,(float)Math.sqrt(magnitude/95f));
-    bands[band]=bands[band]*.58f+value*.42f;
+    float rms=count==0?0:(float)Math.sqrt(power/count);
+    // Ignore the FFT noise floor so silence produces genuinely empty bars.
+    float target=rms<=7f?0f:Math.min(1f,(rms-7f)/48f);
+    target=(float)Math.pow(target,0.78);
+    float previous=bands[band];
+    bands[band]=target>previous?previous*.32f+target*.68f:previous*.42f+target*.58f;
+    if(bands[band]<0.012f)bands[band]=0f;
    }
-   bass=bass*.65f+(bands[0]*.55f+bands[1]*.45f)*.35f;
-   postInvalidateOnAnimation();
-  }
-  void setWaveData(byte[] data){
-   if(data==null||data.length<2)return;
-   float energy=0;for(int i=0;i<data.length;i+=Math.max(1,data.length/64)){float v=Math.abs(((data[i]&255)-128)/128f);energy+=v;}
-   float value=Math.min(1f,energy/64f);
-   bass=bass*.7f+value*.3f;
-   for(int i=0;i<bands.length;i++){int at=Math.min(data.length-1,i*data.length/bands.length);float v=Math.abs(((data[at]&255)-128)/128f);bands[i]=bands[i]*.6f+v*.4f;}
+   bass=(bands[0]*.6f+bands[1]*.4f);
    postInvalidateOnAnimation();
   }
   protected void onDraw(android.graphics.Canvas c){
    super.onDraw(c);float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;
    p.setShader(null);p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(Color.rgb(5,8,15));c.drawRoundRect(0,0,w,h,dp(18),dp(18),p);
+   float peak=0;for(float v:bands)peak=Math.max(peak,v);
+   // No signal means no visualizer elements at all.
+   if(peak<0.012f)return;
    int mode=selectedVisualizer();float mid=h*.5f;
    if(mode==0){
     float bw=w/(bands.length*1.65f),gap=(w-bw*bands.length)/(bands.length+1);
-    for(int i=0;i<bands.length;i++){float bh=dp(8)+bands[i]*h*.70f;float x=gap+i*(bw+gap);p.setShader(new android.graphics.LinearGradient(0,mid-bh/2,0,mid+bh/2,CYAN,Color.rgb(155,80,255),android.graphics.Shader.TileMode.CLAMP));c.drawRoundRect(x,mid-bh/2,x+bw,mid+bh/2,dp(3),dp(3),p);}p.setShader(null);
+    for(int i=0;i<bands.length;i++){float bh=bands[i]*h*.76f;if(bh<dp(1))continue;float x=gap+i*(bw+gap);p.setShader(new android.graphics.LinearGradient(0,mid-bh/2,0,mid+bh/2,CYAN,Color.rgb(155,80,255),android.graphics.Shader.TileMode.CLAMP));c.drawRoundRect(x,mid-bh/2,x+bw,mid+bh/2,dp(3),dp(3),p);}p.setShader(null);
     p.setTextSize(dp(6));p.setTextAlign(android.graphics.Paint.Align.CENTER);p.setColor(MUTED);for(int i=0;i<labels.length;i++){float x=gap+i*(bw+gap)+bw/2;c.drawText(labels[i],x,h-dp(3),p);}
    }else if(mode==1||mode==4){
-    float radius=Math.min(w,h)*.22f+bass*dp(15);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,radius,p);
-    for(int i=0;i<bands.length;i++){double a=2*Math.PI*i/bands.length;float r=radius+dp(5)+bands[i]*dp(30);float x1=w/2+(float)Math.cos(a)*radius,y1=mid+(float)Math.sin(a)*radius,x2=w/2+(float)Math.cos(a)*r,y2=mid+(float)Math.sin(a)*r;p.setStrokeWidth(dp(2));p.setColor(i%3==0?Color.rgb(170,100,255):CYAN);c.drawLine(x1,y1,x2,y2,p);}
+    float radius=Math.min(w,h)*.18f+bass*dp(15);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,radius,p);
+    for(int i=0;i<bands.length;i++){if(bands[i]<.012f)continue;double a=2*Math.PI*i/bands.length;float r=radius+bands[i]*dp(34);float x1=w/2+(float)Math.cos(a)*radius,y1=mid+(float)Math.sin(a)*radius,x2=w/2+(float)Math.cos(a)*r,y2=mid+(float)Math.sin(a)*r;p.setStrokeWidth(dp(2));p.setColor(i%3==0?Color.rgb(170,100,255):CYAN);c.drawLine(x1,y1,x2,y2,p);}
     p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(WHITE);p.setTextAlign(android.graphics.Paint.Align.CENTER);p.setTextSize(dp(13));c.drawText("BASS",w/2,mid+dp(5),p);
    }else if(mode==2){
     float bw=w/(bands.length*1.7f),gap=(w-bw*bands.length)/(bands.length+1);
-    for(int i=0;i<bands.length;i++){float bh=dp(5)+bands[i]*h*.38f,x=gap+i*(bw+gap);p.setColor(CYAN);c.drawRoundRect(x,mid-bh,x+bw,mid,dp(3),dp(3),p);p.setColor(Color.rgb(160,90,255));c.drawRoundRect(x,mid,x+bw,mid+bh,dp(3),dp(3),p);}
+    for(int i=0;i<bands.length;i++){float bh=bands[i]*h*.42f;if(bh<dp(1))continue;float x=gap+i*(bw+gap);p.setColor(CYAN);c.drawRoundRect(x,mid-bh,x+bw,mid,dp(3),dp(3),p);p.setColor(Color.rgb(160,90,255));c.drawRoundRect(x,mid,x+bw,mid+bh,dp(3),dp(3),p);}
    }else if(mode==3){
-    android.graphics.Path path=new android.graphics.Path();for(int i=0;i<bands.length;i++){float x=i*w/(bands.length-1),y=mid-(bands[i]*.8f+.05f)*(h*.42f);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
-    p.setColor(CYAN);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2.5f));c.drawPath(path,p);p.setColor(Color.rgb(130,80,255));p.setStrokeWidth(dp(1));c.drawLine(0,mid,w,mid,p);p.setStyle(android.graphics.Paint.Style.FILL);
+    android.graphics.Path path=new android.graphics.Path();for(int i=0;i<bands.length;i++){float x=i*w/(bands.length-1),y=mid-bands[i]*(h*.42f);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
+    p.setColor(CYAN);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2.5f));c.drawPath(path,p);p.setStyle(android.graphics.Paint.Style.FILL);
    }else if(mode==5){
-    for(int i=0;i<30;i++){float x=(i*73%Math.max(1,(int)w)),y=(i*47%Math.max(1,(int)h));float r=dp(1.5f)+bands[i%bands.length]*dp(5)+bass*dp(3);p.setColor(i%2==0?CYAN:Color.rgb(165,95,255));c.drawCircle(x,y,r,p);}
+    for(int i=0;i<30;i++){float x=(i*73%Math.max(1,(int)w)),y=(i*47%Math.max(1,(int)h));float r=bands[i%bands.length]*dp(7);if(r<dp(1))continue;p.setColor(i%2==0?CYAN:Color.rgb(165,95,255));c.drawCircle(x,y,r,p);}
    }else if(mode==6){
-    int cols=24,rows=5;float cell=w/cols;for(int x=0;x<cols;x++){float v=bands[x*bands.length/cols];int lit=Math.max(0,Math.round(v*rows));for(int y=0;y<rows;y++){p.setColor(y>=rows-lit?(y>3?Color.rgb(170,85,255):CYAN):Color.rgb(20,31,48));c.drawRoundRect(x*cell+dp(2),y*(h/rows)+dp(3),(x+1)*cell-dp(2),(y+1)*(h/rows)-dp(3),dp(2),dp(2),p);}}
+    int cols=20,rows=5;float cell=w/cols;for(int x=0;x<cols;x++){float v=bands[x*bands.length/cols];int lit=Math.max(0,Math.round(v*rows));for(int y=0;y<lit;y++){p.setColor(y>3?Color.rgb(170,85,255):CYAN);c.drawRoundRect(x*cell+dp(2),(rows-1-y)*(h/rows)+dp(3),(x+1)*cell-dp(2),(rows-y)*(h/rows)-dp(3),dp(2),dp(2),p);}}
    }else{
-    float r=dp(18)+bass*Math.min(w,h)*.34f;p.setShader(new android.graphics.RadialGradient(w/2,mid,r,new int[]{Color.rgb(150,85,255),CYAN,Color.TRANSPARENT},null,android.graphics.Shader.TileMode.CLAMP));c.drawCircle(w/2,mid,Math.max(dp(2),r),p);p.setShader(null);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,dp(12)+r*.45f,p);p.setStyle(android.graphics.Paint.Style.FILL);
+    float r=bass*Math.min(w,h)*.42f;if(r>dp(1)){p.setShader(new android.graphics.RadialGradient(w/2,mid,r,new int[]{Color.rgb(150,85,255),CYAN,Color.TRANSPARENT},null,android.graphics.Shader.TileMode.CLAMP));c.drawCircle(w/2,mid,r,p);p.setShader(null);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,dp(12)+r*.45f,p);p.setStyle(android.graphics.Paint.Style.FILL);}
    }
   }
  }
