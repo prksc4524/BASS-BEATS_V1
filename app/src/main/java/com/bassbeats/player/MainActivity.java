@@ -289,6 +289,8 @@ public class MainActivity extends Activity {
     // A fixed dB window preserves real frequency balance without forcing quiet bands to move.
     float target=Math.max(0f,Math.min(1f,(db+58f)/42f));
     target=(float)Math.pow(target,0.82f);
+    // Keep peaks comfortably inside the visualizer area instead of touching its edges.
+    target*=0.68f;
     float previous=bands[band];
     float attack=0.58f,release=0.34f;
     bands[band]=target>previous?previous+(target-previous)*attack:previous*release;
