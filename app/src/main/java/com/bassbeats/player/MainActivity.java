@@ -36,8 +36,14 @@ public class MainActivity extends Activity {
    void playerScreen(){
   content.addView(gap(6));
   TextView heading=text("NOW PLAYING",12,MUTED,true);heading.setLetterSpacing(.06f);heading.setGravity(Gravity.CENTER);content.addView(heading);
-  artworkView=new ImageView(this);artworkView.setScaleType(ImageView.ScaleType.CENTER_CROP);artworkView.setBackground(round(Color.rgb(9,18,32),dp(22)));artworkView.setClipToOutline(true);LinearLayout.LayoutParams artLp=new LinearLayout.LayoutParams(dp(148),dp(148));artLp.gravity=Gravity.CENTER;artLp.topMargin=dp(18);artLp.bottomMargin=dp(14);content.addView(artworkView,artLp);updateArtwork();
-  waveView=new BassVisualizerView(this);LinearLayout.LayoutParams waveLp=new LinearLayout.LayoutParams(-1,dp(112));waveLp.setMargins(0,dp(8),0,dp(14));content.addView(waveView,waveLp);
+  artworkView=new ImageView(this);artworkView.setScaleType(ImageView.ScaleType.CENTER_CROP);artworkView.setBackground(round(Color.rgb(9,18,32),dp(22)));artworkView.setClipToOutline(true);
+  LinearLayout.LayoutParams artLp=new LinearLayout.LayoutParams(dp(148),dp(148));artLp.gravity=Gravity.CENTER;artLp.topMargin=dp(18);artLp.bottomMargin=dp(14);content.addView(artworkView,artLp);updateArtwork();
+  waveView=new BassVisualizerView(this);LinearLayout.LayoutParams waveLp=new LinearLayout.LayoutParams(-1,dp(112));waveLp.gravity=Gravity.CENTER;waveLp.setMargins(0,dp(8),0,dp(14));content.addView(waveView,waveLp);
+  android.content.SharedPreferences displayPrefs=getSharedPreferences("player_display",MODE_PRIVATE);
+  boolean visualizerMode=displayPrefs.getString("mode","visualizer").equals("visualizer");
+  artworkView.setVisibility(visualizerMode?View.GONE:View.VISIBLE);
+  waveView.setVisibility(visualizerMode?View.VISIBLE:View.GONE);
+  if(visualizerMode){LinearLayout.LayoutParams visualLp=(LinearLayout.LayoutParams)waveView.getLayoutParams();visualLp.height=dp(220);visualLp.width=-1;visualLp.gravity=Gravity.CENTER;visualLp.setMargins(dp(8),dp(22),dp(8),dp(22));waveView.setLayoutParams(visualLp);}
   songTitle=text(current>=0&&current<songs.size()?cleanSongTitle(songs.get(current).title):"Choose a song",20,WHITE,true);songTitle.setGravity(Gravity.CENTER);songTitle.setMaxLines(2);songTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);LinearLayout.LayoutParams titleLp=new LinearLayout.LayoutParams(-1,-2);titleLp.setMargins(dp(8),dp(6),dp(8),0);content.addView(songTitle,titleLp);
   songArtist=text(current>=0&&current<songs.size()?songs.get(current).artist:"Your offline library",13,MUTED,false);songArtist.setGravity(Gravity.CENTER);LinearLayout.LayoutParams artistLp=new LinearLayout.LayoutParams(-1,-2);artistLp.topMargin=dp(6);content.addView(songArtist,artistLp);
   View spacer=new View(this);content.addView(spacer,new LinearLayout.LayoutParams(1,0,1f));
