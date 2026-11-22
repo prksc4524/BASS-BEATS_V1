@@ -311,8 +311,8 @@ public class PlaybackService extends Service {
                     data.putExtra("waveform", waveform);
                     sendBroadcast(data);
                 }
-                @Override public void onFftDataCapture(Visualizer effect, byte[] fft, int samplingRate) { }
-            }, Math.min(Visualizer.getMaxCaptureRate(), 20000), true, false);
+                @Override public void onFftDataCapture(Visualizer effect, byte[] fft, int samplingRate) { Intent data = new Intent(VISUALIZER_DATA).setPackage(getPackageName()); data.putExtra("fft", fft); sendBroadcast(data); }
+            }, Math.min(Visualizer.getMaxCaptureRate(), 10000), true, true);
             visualizer.setEnabled(true);
         } catch (Exception ignored) { releaseVisualizer(); }
     }
