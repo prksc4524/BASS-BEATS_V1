@@ -271,10 +271,16 @@ public class MainActivity extends Activity {
     float power=0;int count=0;
     for(int bin=first;bin<=last;bin++){int re=fft[bin*2],im=fft[bin*2+1];power+=re*re+im*im;count++;}
     float rms=count==0?0:(float)Math.sqrt(power/count);
-    float target=rms<=7f?0f:Math.min(1f,(rms-7f)/48f);
-    target=(float)Math.pow(target,0.78);
+    // Per-band calibration compensates for the naturally stronger low-frequency energy.
+    // A band still moves only when its own FFT bins contain real signal.
+    final float[] sensitivity={0.78f,0.88f,1.00f,1.12f,1.28f,1.48f,1.72f,1.98f,2.25f,2.45f};
+    float noiseFloor=band<2?8f:6f;
+    float raw=rms<=noiseFloor?0f:(rms-noiseFloor)/48f;
+    float target=(float)Math.pow(Math.min(1f,raw*sensitivity[band]),0.68f);
     float previous=bands[band];
-    bands[band]=target>previous?previous*.32f+target*.68f:previous*.42f+target*.58f;
+    float attack=band<2?0.42f:0.62f;
+    float release=0.52f;
+    bands[band]=target>previous?previous*(1f-attack)+target*attack:previous*release+target*(1f-release);
     if(bands[band]<0.012f)bands[band]=0f;
    }
    bass=bands[0]*.6f+bands[1]*.4f;
