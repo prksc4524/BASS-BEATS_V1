@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
  void sendEffect(String action,String key1,int value1,String key2,int value2){Intent x=new Intent(this,PlaybackService.class);x.setAction(action);x.putExtra(key1,value1);x.putExtra(key2,value2);startService(x);}
  void sendBassEffect(boolean enabled,int strength){Intent x=new Intent(this,PlaybackService.class);x.setAction(PlaybackService.EQ_BASS);x.putExtra("enabled",enabled);x.putExtra("strength",strength);if(Build.VERSION.SDK_INT>=26)startForegroundService(x);else startService(x);}
 
- void settingsScreen(){content.addView(text("SETTINGS",22,WHITE,true));setting("Visualizer Style",getVisualizerName()+" · 8 bass-reactive styles");setting("Appearance","Black theme · Electric blue / cyan");setting("Playback","Resume last song and position");setting("Music Library","Scan local music files");setting("Audio","Equalizer and Bass Boost");setting("App Info","BASS BEATS · Version 2.2.0");setting("Reset Settings","Restore default preferences");}
+ void settingsScreen(){content.addView(text("SETTINGS",22,WHITE,true));setting("Visualizer Style",getVisualizerName()+" · 9 FFT visualizer styles");setting("Appearance","Black theme · Electric blue / cyan");setting("Playback","Resume last song and position");setting("Music Library","Scan local music files");setting("Audio","Equalizer and Bass Boost");setting("App Info","BASS BEATS · Version 2.2.0");setting("Reset Settings","Restore default preferences");}
  void setting(String title,String desc){LinearLayout row=new LinearLayout(this);row.setOrientation(1);row.setPadding(dp(14),dp(13),dp(14),dp(13));row.setBackground(round(PANEL,dp(12)));row.addView(text(title,14,WHITE,true));row.addView(text(desc,11,MUTED,false));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,dp(5),0,dp(5));content.addView(row,lp);row.setOnClickListener(v->{if(title.equals("Visualizer Style")){showVisualizerPicker();}else if(title.equals("Music Library")){loadSongs();showTab("MUSIC");Toast.makeText(this,"Library refreshed",Toast.LENGTH_SHORT).show();}else if(title.equals("Audio")){showTab("EQUALIZER");}else if(title.equals("App Info")){new AlertDialog.Builder(this).setTitle("BASS BEATS").setMessage("Version 2.2.0\nPremium AMOLED offline music player").setPositiveButton("OK",null).show();}else if(title.equals("Reset Settings")){new AlertDialog.Builder(this).setTitle("Reset settings?").setMessage("Restore the app's default screen settings?").setNegativeButton("Cancel",null).setPositiveButton("Reset",(d,w)->{Toast.makeText(this,"Settings reset",Toast.LENGTH_SHORT).show();showTab("SETTINGS");}).show();}else if(title.equals("Appearance")){new AlertDialog.Builder(this).setTitle("Appearance").setItems(new String[]{"Black · Electric blue / cyan"},(d,w)->Toast.makeText(this,"Current theme selected",Toast.LENGTH_SHORT).show()).show();}else if(title.equals("Playback")){new AlertDialog.Builder(this).setTitle("Playback").setItems(new String[]{"Resume last song and position", "Audio focus (default)"},(d,w)->Toast.makeText(this,"Playback preference selected",Toast.LENGTH_SHORT).show()).show();}});}
  void loadSongs(){songs.clear();if(checkSelfPermission(Build.VERSION.SDK_INT>=33?Manifest.permission.READ_MEDIA_AUDIO:Manifest.permission.READ_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED)return;Uri collection=MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DATA};try(Cursor c=getContentResolver().query(collection,projection,MediaStore.Audio.Media.IS_MUSIC+" != 0",null,MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC")){if(c!=null)while(c.moveToNext()){long id=c.getLong(0);String title=c.getString(1),artist=c.getString(2),album=c.getString(3),path=c.getString(4);if(title==null)title="Unknown title";if(artist==null||artist.equals("<unknown>"))artist="Unknown artist";if(album==null)album="Unknown album";songs.add(new Song(id,title,artist,album,path,Uri.withAppendedPath(collection,String.valueOf(id))));}}catch(Exception e){Toast.makeText(this,"Could not scan music",Toast.LENGTH_SHORT).show();}}
  @Override protected void onResume(){super.onResume();handler.removeCallbacks(playerTicker);handler.post(playerTicker);}
@@ -248,45 +248,60 @@ public class MainActivity extends Activity {
  String getVisualizerName(){int n=selectedVisualizer();return VISUALIZER_NAMES[Math.max(0,Math.min(VISUALIZER_NAMES.length-1,n))];}
  void showVisualizerPicker(){
   final android.app.Dialog dialog=new android.app.Dialog(this);LinearLayout shell=new LinearLayout(this);shell.setOrientation(1);shell.setPadding(dp(18),dp(18),dp(18),dp(16));shell.setBackground(round(Color.rgb(7,10,17),dp(22)));
-  TextView title=text("VISUALIZER STYLE",18,WHITE,true);shell.addView(title);TextView sub=text("Choose a bass-reactive look",12,MUTED,false);LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(-1,-2);slp.topMargin=dp(5);slp.bottomMargin=dp(14);shell.addView(sub,slp);
+  TextView title=text("VISUALIZER STYLE",18,WHITE,true);shell.addView(title);TextView sub=text("Choose a live music visualizer",12,MUTED,false);LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(-1,-2);slp.topMargin=dp(5);slp.bottomMargin=dp(14);shell.addView(sub,slp);
   android.widget.GridLayout grid=new android.widget.GridLayout(this);grid.setColumnCount(2);grid.setRowCount(5);
   for(int i=0;i<VISUALIZER_NAMES.length;i++){final int index=i;LinearLayout tile=new LinearLayout(this);tile.setOrientation(1);tile.setGravity(Gravity.CENTER);tile.setPadding(dp(8),dp(13),dp(8),dp(13));tile.setBackground(round(selectedVisualizer()==i?Color.rgb(10,37,75):Color.rgb(18,23,34),dp(14)));TextView glyph=text(new String[]{"▥","⠿","∿","▯","◉","◆","▦","ϟ","▥"}[i],25,CYAN,true);glyph.setGravity(Gravity.CENTER);tile.addView(glyph);TextView name=text(VISUALIZER_NAMES[i],12,WHITE,true);name.setGravity(Gravity.CENTER);LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(-1,-2);nlp.topMargin=dp(5);tile.addView(name,nlp);if(selectedVisualizer()==i){TextView active=text("SELECTED",9,CYAN,true);active.setGravity(Gravity.CENTER);tile.addView(active);}android.widget.GridLayout.LayoutParams gp=new android.widget.GridLayout.LayoutParams();gp.width=0;gp.height=dp(102);gp.columnSpec=android.widget.GridLayout.spec(i%2,1,1f);gp.rowSpec=android.widget.GridLayout.spec(i/2);gp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(tile,gp);tile.setOnClickListener(v->{getSharedPreferences("visualizer_settings",MODE_PRIVATE).edit().putInt("style",index).apply();dialog.dismiss();if(tab.equals("PLAYER"))showTab("PLAYER");Toast.makeText(this,VISUALIZER_NAMES[index]+" selected",Toast.LENGTH_SHORT).show();});}
   shell.addView(grid);TextView note=text("Selection applies instantly and stays saved",10,MUTED,false);note.setGravity(Gravity.CENTER);LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,-2);np.topMargin=dp(10);shell.addView(note,np);dialog.setContentView(shell);Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setLayout(getResources().getDisplayMetrics().widthPixels-dp(32),-2);}dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-dp(32),-2);
  }
  class BassVisualizerView extends View {
   final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-  final float[] bands=new float[10];
+  final int BAND_COUNT=48;
+  final float[] bands=new float[BAND_COUNT];
   float bass=0;
   BassVisualizerView(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);setBackgroundColor(Color.BLACK);}
   void setFftData(byte[] fft,int samplingRate){
-   if(fft==null||fft.length<8)return;
-   float binHz=Math.max(1f,(samplingRate>0?samplingRate:44100000)/1000f/fft.length);
-   int maxBin=Math.max(1,(fft.length-1)/2);
-   float[] centers={31f,62f,125f,250f,500f,1000f,2000f,4000f,8000f,16000f};
-   for(int band=0;band<centers.length;band++){
-    float low=band==0?20f:(float)Math.sqrt(centers[band-1]*centers[band]);
-    float high=band==centers.length-1?20000f:(float)Math.sqrt(centers[band]*centers[band+1]);
-    int first=Math.max(1,(int)Math.floor(low/binHz)),last=Math.min(maxBin,(int)Math.ceil(high/binHz));
-    if(last<first)first=last=Math.max(1,Math.min(maxBin,Math.round(centers[band]/binHz)));
-    float power=0;int count=0;
-    for(int bin=first;bin<=last;bin++){int re=fft[bin*2],im=fft[bin*2+1];power+=re*re+im*im;count++;}
-    float rms=count==0?0:(float)Math.sqrt(power/count);
-    // Per-band calibration compensates for the naturally stronger low-frequency energy.
-    // A band still moves only when its own FFT bins contain real signal.
-    final float[] sensitivity={0.78f,0.88f,1.00f,1.12f,1.28f,1.48f,1.72f,1.98f,2.25f,2.45f};
-    float noiseFloor=band<2?8f:6f;
-    float raw=rms<=noiseFloor?0f:(rms-noiseFloor)/48f;
-    float target=(float)Math.pow(Math.min(1f,raw*sensitivity[band]),0.68f);
+   if(fft==null||fft.length<16)return;
+   // Android Visualizer supplies samplingRate in milliHertz and interleaved complex FFT bytes.
+   float nyquist=Math.max(1000f,(samplingRate>0?samplingRate:44100000)/2000f);
+   float binHz=Math.max(0.1f,nyquist/Math.max(1,fft.length/2f));
+   int maxBin=Math.min((fft.length-1)/2,Math.max(1,(int)(nyquist/binHz)));
+   float minHz=30f,maxHz=Math.min(16000f,nyquist*0.92f);
+   if(maxHz<=minHz)maxHz=Math.max(minHz+1f,nyquist*0.9f);
+   for(int band=0;band<BAND_COUNT;band++){
+    float low=(float)(minHz*Math.pow(maxHz/minHz,band/(double)BAND_COUNT));
+    float high=(float)(minHz*Math.pow(maxHz/minHz,(band+1)/(double)BAND_COUNT));
+    int first=Math.max(1,(int)Math.ceil(low/binHz));
+    int last=Math.min(maxBin,(int)Math.floor(high/binHz));
+    float magnitude=0f;int samples=0;
+    if(last>=first){
+     for(int bin=first;bin<=last;bin++){
+      int idx=bin*2;if(idx+1>=fft.length)break;
+      float re=fft[idx],im=fft[idx+1];
+      magnitude+=(float)Math.sqrt(re*re+im*im);samples++;
+     }
+    }else{
+     int bin=Math.max(1,Math.min(maxBin,Math.round((float)Math.sqrt(low*high)/binHz)));
+     int idx=bin*2;
+     if(idx+1<fft.length){float re=fft[idx],im=fft[idx+1];magnitude=(float)Math.sqrt(re*re+im*im);samples=1;}
+    }
+    float average=samples==0?0f:magnitude/samples;
+    float db=average<=0.5f?-72f:(float)(20.0*Math.log10(average/127.0));
+    // A fixed dB window preserves real frequency balance without forcing quiet bands to move.
+    float target=Math.max(0f,Math.min(1f,(db+58f)/42f));
+    target=(float)Math.pow(target,0.82f);
     float previous=bands[band];
-    float attack=band<2?0.42f:0.62f;
-    float release=0.52f;
-    bands[band]=target>previous?previous*(1f-attack)+target*attack:previous*release+target*(1f-release);
-    if(bands[band]<0.012f)bands[band]=0f;
+    float attack=0.58f,release=0.34f;
+    bands[band]=target>previous?previous+(target-previous)*attack:previous*release;
+    if(bands[band]<0.009f)bands[band]=0f;
    }
-   bass=bands[0]*.6f+bands[1]*.4f;
+   bass=0f;for(int i=0;i<6;i++)bass+=bands[i];bass/=6f;
    postInvalidateOnAnimation();
   }
-  float bandAt(float x){float pos=Math.max(0,Math.min(1,x))*(bands.length-1);int i=(int)pos;int j=Math.min(bands.length-1,i+1);return bands[i]+(bands[j]-bands[i])*(pos-i);}
+  float bandAt(float x){
+   float pos=Math.max(0f,Math.min(1f,x))*(bands.length-1);
+   int i=(int)pos,j=Math.min(bands.length-1,i+1);
+   return bands[i]+(bands[j]-bands[i])*(pos-i);
+  }
   void glow(int color,float radius){p.setShadowLayer(radius,0,0,color);p.setColor(color);}
   void rect(android.graphics.Canvas c,float l,float t,float r,float b,float rad,int color){if(r<=l||b<=t)return;p.setShader(null);p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(color);p.setShadowLayer(dp(7),0,0,color);c.drawRoundRect(l,t,r,b,rad,rad,p);p.clearShadowLayer();}
   protected void onDraw(android.graphics.Canvas c){
