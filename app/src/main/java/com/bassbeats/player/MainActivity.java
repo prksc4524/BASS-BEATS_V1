@@ -256,7 +256,6 @@ public class MainActivity extends Activity {
  class BassVisualizerView extends View {
   final android.graphics.Paint p=new android.graphics.Paint(3);
   final float[] bands=new float[10];
-  final String[] labels={"31","62","125","250","500","1k","2k","4k","8k","16k"};
   float bass=0;
   BassVisualizerView(Context c){super(c);setBackgroundColor(Color.BLACK);}
   void setFftData(byte[] fft,int samplingRate){
@@ -297,7 +296,6 @@ public class MainActivity extends Activity {
    if(mode==0){
     float bw=w/(bands.length*1.65f),gap=(w-bw*bands.length)/(bands.length+1);
     for(int i=0;i<bands.length;i++){float bh=bands[i]*h*.76f;if(bh<dp(1))continue;float x=gap+i*(bw+gap);p.setShader(new android.graphics.LinearGradient(0,mid-bh/2,0,mid+bh/2,CYAN,Color.rgb(155,80,255),android.graphics.Shader.TileMode.CLAMP));c.drawRoundRect(x,mid-bh/2,x+bw,mid+bh/2,dp(3),dp(3),p);}p.setShader(null);
-    p.setTextSize(dp(6));p.setTextAlign(android.graphics.Paint.Align.CENTER);p.setColor(MUTED);for(int i=0;i<labels.length;i++){float x=gap+i*(bw+gap)+bw/2;c.drawText(labels[i],x,h-dp(3),p);}
    }else if(mode==1||mode==4){
     float radius=Math.min(w,h)*.18f+bass*dp(15);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,radius,p);
     for(int i=0;i<bands.length;i++){if(bands[i]<.012f)continue;double a=2*Math.PI*i/bands.length;float r=radius+bands[i]*dp(34);float x1=w/2+(float)Math.cos(a)*radius,y1=mid+(float)Math.sin(a)*radius,x2=w/2+(float)Math.cos(a)*r,y2=mid+(float)Math.sin(a)*r;p.setStrokeWidth(dp(2));p.setColor(i%3==0?Color.rgb(170,100,255):CYAN);c.drawLine(x1,y1,x2,y2,p);}
