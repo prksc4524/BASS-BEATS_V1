@@ -311,7 +311,7 @@ public class PlaybackService extends Service {
                     data.putExtra("waveform", waveform);
                     sendBroadcast(data);
                 }
-                @Override public void onFftDataCapture(Visualizer effect, byte[] fft, int samplingRate) { Intent data = new Intent(VISUALIZER_DATA).setPackage(getPackageName()); data.putExtra("fft", fft); sendBroadcast(data); }
+                @Override public void onFftDataCapture(Visualizer effect, byte[] fft, int samplingRate) { Intent data = new Intent(VISUALIZER_DATA).setPackage(getPackageName()); data.putExtra("fft", fft); data.putExtra("sampling_rate", samplingRate); sendBroadcast(data); }
             }, Math.min(Visualizer.getMaxCaptureRate(), 10000), true, true);
             visualizer.setEnabled(true);
         } catch (Exception ignored) { releaseVisualizer(); }
