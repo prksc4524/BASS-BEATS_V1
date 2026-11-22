@@ -52,6 +52,9 @@ public class PlaybackService extends Service {
     private Visualizer visualizer;
     private boolean playerPrepared = false;
     private final Handler fadeHandler = new Handler(Looper.getMainLooper());
+    private final Handler callResumeHandler = new Handler(Looper.getMainLooper());
+    private Runnable callResumeRunnable;
+    private boolean callResumePending = false;
     private Runnable fadeRunnable;
     private float currentVolume = 1.0f;
     private static final long FADE_DURATION_MS = 1500L;
@@ -131,8 +134,9 @@ public class PlaybackService extends Service {
                     externalAudioInterrupted = true;
                 }
                 if (active) pausePlayback();
+            } else if (change == AudioManager.AUDIOFOCUS_GAIN && callResumePending && !callInProgress) {
+                scheduleCallResume(0);
             }
-            // AUDIOFOCUS_GAIN intentionally does not restart playback.
         };
         registerPhoneStateListener();
         session = new MediaSession(this, "BASS BEATS");
@@ -242,8 +246,11 @@ public class PlaybackService extends Service {
                 }
             });
             player.setOnErrorListener((mp, what, extra) -> {
-                broadcastState(false);
+                // A failed decoder/data source must not leave a stale player or audio effects alive.
+                releasePlayer();
+                updateSession(false);
                 updateNotification(false);
+                broadcastState(false);
                 return true;
             });
             player.prepareAsync();
@@ -393,20 +400,55 @@ public class PlaybackService extends Service {
         if (state == TelephonyManager.CALL_STATE_RINGING || state == TelephonyManager.CALL_STATE_OFFHOOK) {
             if (!callInProgress) {
                 boolean playingNow = isActuallyPlaying();
-                wasPlayingBeforeCall = playingNow;
-                pausedForCall = playingNow;
-                // If playback is active, it was resumed by the user after any earlier interruption.
-                if (playingNow) externalAudioInterrupted = false;
+                // Audio focus can pause playback just before the telephony callback arrives.
+                boolean interruptedAtCallStart = focusInterrupted;
+                wasPlayingBeforeCall = playingNow || interruptedAtCallStart;
+                pausedForCall = wasPlayingBeforeCall;
+                if (wasPlayingBeforeCall) externalAudioInterrupted = false;
+                cancelCallResume();
             }
             callInProgress = true;
             if (isActuallyPlaying()) pausePlaybackImmediately();
         } else if (state == TelephonyManager.CALL_STATE_IDLE) {
-            boolean shouldResume = callInProgress && pausedForCall && wasPlayingBeforeCall && !externalAudioInterrupted;
+            boolean shouldResume = callInProgress && pausedForCall && wasPlayingBeforeCall;
             callInProgress = false;
             pausedForCall = false;
             wasPlayingBeforeCall = false;
             focusInterrupted = false;
-            if (shouldResume && player != null && playerPrepared) resumePlayback();
+            if (shouldResume && player != null && playerPrepared) {
+                callResumePending = true;
+                scheduleCallResume(0);
+            }
+        }
+    }
+
+    private void scheduleCallResume(long delayMs) {
+        if (!callResumePending || callInProgress) return;
+        if (callResumeRunnable != null) callResumeHandler.removeCallbacks(callResumeRunnable);
+        callResumeRunnable = () -> {
+            callResumeRunnable = null;
+            if (!callResumePending || callInProgress) return;
+            if (player == null || !playerPrepared) {
+                callResumePending = false;
+                return;
+            }
+            resumePlayback();
+            if (isActuallyPlaying()) {
+                callResumePending = false;
+            } else {
+                // Some devices release audio focus a little after the call state becomes IDLE.
+                // Retry briefly rather than leaving playback paused indefinitely.
+                scheduleCallResume(500);
+            }
+        };
+        callResumeHandler.postDelayed(callResumeRunnable, Math.max(0, delayMs));
+    }
+
+    private void cancelCallResume() {
+        callResumePending = false;
+        if (callResumeRunnable != null) {
+            callResumeHandler.removeCallbacks(callResumeRunnable);
+            callResumeRunnable = null;
         }
     }
 
@@ -437,6 +479,11 @@ public class PlaybackService extends Service {
             }
             externalAudioInterrupted = false;
             focusInterrupted = false;
+            callResumePending = false;
+            if (callResumeRunnable != null) {
+                callResumeHandler.removeCallbacks(callResumeRunnable);
+                callResumeRunnable = null;
+            }
             pausedForCall = false;
             wasPlayingBeforeCall = false;
             cancelFade();
@@ -553,6 +600,7 @@ public class PlaybackService extends Service {
     private void releasePlayer() { unregisterNoisyAudioReceiver(); cancelFade(); releaseVisualizer(); currentVolume = 1.0f; playerPrepared = false; releaseAudioEffects(); if (player != null) { try { player.setOnPreparedListener(null); player.setOnCompletionListener(null); player.release(); } catch (Exception ignored) { } player = null; } }
     @Override public void onDestroy() {
         cancelFade();
+        cancelCallResume();
         if (telephonyManager != null) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && callStateCallback != null) {
