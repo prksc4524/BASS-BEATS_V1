@@ -243,75 +243,71 @@ public class MainActivity extends Activity {
   }
  }
 
- static final String[] VISUALIZER_NAMES={"Bass Spectrum","Bass Circle","Mirror Bass","Bass Wave","Radial Bass","Bass Particles","LED Matrix","Bass Pulse"};
+ static final String[] VISUALIZER_NAMES={"Neon Spectrum","Dot Matrix","Flow Wave","Outline Spectrum","Radial Spectrum","Diamond Caps","Stacked Blocks","Mirror Wave","Soft Neon Bars"};
  int selectedVisualizer(){return getSharedPreferences("visualizer_settings",MODE_PRIVATE).getInt("style",0);}
  String getVisualizerName(){int n=selectedVisualizer();return VISUALIZER_NAMES[Math.max(0,Math.min(VISUALIZER_NAMES.length-1,n))];}
  void showVisualizerPicker(){
   final android.app.Dialog dialog=new android.app.Dialog(this);LinearLayout shell=new LinearLayout(this);shell.setOrientation(1);shell.setPadding(dp(18),dp(18),dp(18),dp(16));shell.setBackground(round(Color.rgb(7,10,17),dp(22)));
   TextView title=text("VISUALIZER STYLE",18,WHITE,true);shell.addView(title);TextView sub=text("Choose a bass-reactive look",12,MUTED,false);LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(-1,-2);slp.topMargin=dp(5);slp.bottomMargin=dp(14);shell.addView(sub,slp);
-  android.widget.GridLayout grid=new android.widget.GridLayout(this);grid.setColumnCount(2);grid.setRowCount(4);
-  for(int i=0;i<VISUALIZER_NAMES.length;i++){final int index=i;LinearLayout tile=new LinearLayout(this);tile.setOrientation(1);tile.setGravity(Gravity.CENTER);tile.setPadding(dp(8),dp(13),dp(8),dp(13));tile.setBackground(round(selectedVisualizer()==i?Color.rgb(10,37,75):Color.rgb(18,23,34),dp(14)));TextView glyph=text(new String[]{"▥","◉","▤","∿","✺","✧","▦","●"}[i],25,CYAN,true);glyph.setGravity(Gravity.CENTER);tile.addView(glyph);TextView name=text(VISUALIZER_NAMES[i],12,WHITE,true);name.setGravity(Gravity.CENTER);LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(-1,-2);nlp.topMargin=dp(5);tile.addView(name,nlp);if(selectedVisualizer()==i){TextView active=text("SELECTED",9,CYAN,true);active.setGravity(Gravity.CENTER);tile.addView(active);}android.widget.GridLayout.LayoutParams gp=new android.widget.GridLayout.LayoutParams();gp.width=0;gp.height=dp(102);gp.columnSpec=android.widget.GridLayout.spec(i%2,1,1f);gp.rowSpec=android.widget.GridLayout.spec(i/2);gp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(tile,gp);tile.setOnClickListener(v->{getSharedPreferences("visualizer_settings",MODE_PRIVATE).edit().putInt("style",index).apply();dialog.dismiss();if(tab.equals("PLAYER"))showTab("PLAYER");Toast.makeText(this,VISUALIZER_NAMES[index]+" selected",Toast.LENGTH_SHORT).show();});}
+  android.widget.GridLayout grid=new android.widget.GridLayout(this);grid.setColumnCount(2);grid.setRowCount(5);
+  for(int i=0;i<VISUALIZER_NAMES.length;i++){final int index=i;LinearLayout tile=new LinearLayout(this);tile.setOrientation(1);tile.setGravity(Gravity.CENTER);tile.setPadding(dp(8),dp(13),dp(8),dp(13));tile.setBackground(round(selectedVisualizer()==i?Color.rgb(10,37,75):Color.rgb(18,23,34),dp(14)));TextView glyph=text(new String[]{"▥","⠿","∿","▯","◉","◆","▦","ϟ","▥"}[i],25,CYAN,true);glyph.setGravity(Gravity.CENTER);tile.addView(glyph);TextView name=text(VISUALIZER_NAMES[i],12,WHITE,true);name.setGravity(Gravity.CENTER);LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(-1,-2);nlp.topMargin=dp(5);tile.addView(name,nlp);if(selectedVisualizer()==i){TextView active=text("SELECTED",9,CYAN,true);active.setGravity(Gravity.CENTER);tile.addView(active);}android.widget.GridLayout.LayoutParams gp=new android.widget.GridLayout.LayoutParams();gp.width=0;gp.height=dp(102);gp.columnSpec=android.widget.GridLayout.spec(i%2,1,1f);gp.rowSpec=android.widget.GridLayout.spec(i/2);gp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(tile,gp);tile.setOnClickListener(v->{getSharedPreferences("visualizer_settings",MODE_PRIVATE).edit().putInt("style",index).apply();dialog.dismiss();if(tab.equals("PLAYER"))showTab("PLAYER");Toast.makeText(this,VISUALIZER_NAMES[index]+" selected",Toast.LENGTH_SHORT).show();});}
   shell.addView(grid);TextView note=text("Selection applies instantly and stays saved",10,MUTED,false);note.setGravity(Gravity.CENTER);LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,-2);np.topMargin=dp(10);shell.addView(note,np);dialog.setContentView(shell);Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setLayout(getResources().getDisplayMetrics().widthPixels-dp(32),-2);}dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-dp(32),-2);
  }
  class BassVisualizerView extends View {
-  final android.graphics.Paint p=new android.graphics.Paint(3);
+  final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
   final float[] bands=new float[10];
   float bass=0;
-  BassVisualizerView(Context c){super(c);setBackgroundColor(Color.BLACK);}
+  BassVisualizerView(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);setBackgroundColor(Color.BLACK);}
   void setFftData(byte[] fft,int samplingRate){
    if(fft==null||fft.length<8)return;
-   // Android Visualizer reports samplingRate in milli-Hz; FFT bins span 0..Nyquist.
    float binHz=Math.max(1f,(samplingRate>0?samplingRate:44100000)/1000f/fft.length);
    int maxBin=Math.max(1,(fft.length-1)/2);
    float[] centers={31f,62f,125f,250f,500f,1000f,2000f,4000f,8000f,16000f};
    for(int band=0;band<centers.length;band++){
     float low=band==0?20f:(float)Math.sqrt(centers[band-1]*centers[band]);
     float high=band==centers.length-1?20000f:(float)Math.sqrt(centers[band]*centers[band+1]);
-    int first=Math.max(1,(int)Math.floor(low/binHz));
-    int last=Math.min(maxBin,(int)Math.ceil(high/binHz));
+    int first=Math.max(1,(int)Math.floor(low/binHz)),last=Math.min(maxBin,(int)Math.ceil(high/binHz));
     if(last<first)first=last=Math.max(1,Math.min(maxBin,Math.round(centers[band]/binHz)));
     float power=0;int count=0;
-    for(int bin=first;bin<=last;bin++){
-     int re=fft[bin*2],im=fft[bin*2+1];
-     power+=re*re+im*im;count++;
-    }
+    for(int bin=first;bin<=last;bin++){int re=fft[bin*2],im=fft[bin*2+1];power+=re*re+im*im;count++;}
     float rms=count==0?0:(float)Math.sqrt(power/count);
-    // Ignore the FFT noise floor so silence produces genuinely empty bars.
     float target=rms<=7f?0f:Math.min(1f,(rms-7f)/48f);
     target=(float)Math.pow(target,0.78);
     float previous=bands[band];
     bands[band]=target>previous?previous*.32f+target*.68f:previous*.42f+target*.58f;
     if(bands[band]<0.012f)bands[band]=0f;
    }
-   bass=(bands[0]*.6f+bands[1]*.4f);
+   bass=bands[0]*.6f+bands[1]*.4f;
    postInvalidateOnAnimation();
   }
+  float bandAt(float x){float pos=Math.max(0,Math.min(1,x))*(bands.length-1);int i=(int)pos;int j=Math.min(bands.length-1,i+1);return bands[i]+(bands[j]-bands[i])*(pos-i);}
+  void glow(int color,float radius){p.setShadowLayer(radius,0,0,color);p.setColor(color);}
+  void rect(android.graphics.Canvas c,float l,float t,float r,float b,float rad,int color){if(r<=l||b<=t)return;p.setShader(null);p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(color);p.setShadowLayer(dp(7),0,0,color);c.drawRoundRect(l,t,r,b,rad,rad,p);p.clearShadowLayer();}
   protected void onDraw(android.graphics.Canvas c){
    super.onDraw(c);float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;
-   p.setShader(null);p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(Color.rgb(5,8,15));c.drawRoundRect(0,0,w,h,dp(18),dp(18),p);
-   float peak=0;for(float v:bands)peak=Math.max(peak,v);
-   // No signal means no visualizer elements at all.
-   if(peak<0.012f)return;
-   int mode=selectedVisualizer();float mid=h*.5f;
-   if(mode==0){
-    float bw=w/(bands.length*1.65f),gap=(w-bw*bands.length)/(bands.length+1);
-    for(int i=0;i<bands.length;i++){float bh=bands[i]*h*.76f;if(bh<dp(1))continue;float x=gap+i*(bw+gap);p.setShader(new android.graphics.LinearGradient(0,mid-bh/2,0,mid+bh/2,CYAN,Color.rgb(155,80,255),android.graphics.Shader.TileMode.CLAMP));c.drawRoundRect(x,mid-bh/2,x+bw,mid+bh/2,dp(3),dp(3),p);}p.setShader(null);
-   }else if(mode==1||mode==4){
-    float radius=Math.min(w,h)*.18f+bass*dp(15);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,radius,p);
-    for(int i=0;i<bands.length;i++){if(bands[i]<.012f)continue;double a=2*Math.PI*i/bands.length;float r=radius+bands[i]*dp(34);float x1=w/2+(float)Math.cos(a)*radius,y1=mid+(float)Math.sin(a)*radius,x2=w/2+(float)Math.cos(a)*r,y2=mid+(float)Math.sin(a)*r;p.setStrokeWidth(dp(2));p.setColor(i%3==0?Color.rgb(170,100,255):CYAN);c.drawLine(x1,y1,x2,y2,p);}
-    p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(WHITE);p.setTextAlign(android.graphics.Paint.Align.CENTER);p.setTextSize(dp(13));c.drawText("BASS",w/2,mid+dp(5),p);
+   p.setShader(null);p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(Color.BLACK);c.drawRect(0,0,w,h,p);
+   float peak=0;for(float v:bands)peak=Math.max(peak,v);if(peak<.012f)return;
+   int mode=Math.max(0,Math.min(8,selectedVisualizer()));float mid=h*.5f;
+   int cyan=Color.rgb(35,205,255),blue=Color.rgb(45,105,255),purple=Color.rgb(175,75,255),pink=Color.rgb(255,65,190);
+   int count=48;
+   if(mode==0||mode==8){
+    float gap=dp(mode==0?3:2),bw=(w-gap*(count+1))/count;
+    for(int i=0;i<count;i++){float v=bandAt(i/(float)(count-1));float bh=v*h*(mode==0?.82f:.76f);if(bh<dp(1))continue;float x=gap+i*(bw+gap);int top=Color.rgb(55,190,255);int bottom=i%5==0?purple:blue;p.setShader(new android.graphics.LinearGradient(0,mid-bh/2,0,mid+bh/2,top,bottom,android.graphics.Shader.TileMode.CLAMP));p.setStyle(android.graphics.Paint.Style.FILL);p.setShadowLayer(dp(8),0,0,i%5==0?purple:cyan);c.drawRoundRect(x,mid-bh/2,x+bw,mid+bh/2,dp(mode==8?5:2),dp(mode==8?5:2),p);p.clearShadowLayer();}p.setShader(null);
+   }else if(mode==1){
+    int cols=52,rows=7;float cw=w/cols,ch=h/(rows+1);float radius=Math.min(cw,ch)*.34f;
+    for(int x=0;x<cols;x++){float v=bandAt(x/(float)(cols-1));int lit=Math.round(v*rows);for(int y=0;y<lit;y++){float xx=x*cw+cw/2,yy=mid+(y-(rows-1)/2f)*ch;int col=y>4?purple:(x%4==0?pink:cyan);p.setColor(col);p.setShadowLayer(dp(5),0,0,col);c.drawCircle(xx,yy,radius,p);p.clearShadowLayer();}}
    }else if(mode==2){
-    float bw=w/(bands.length*1.7f),gap=(w-bw*bands.length)/(bands.length+1);
-    for(int i=0;i<bands.length;i++){float bh=bands[i]*h*.42f;if(bh<dp(1))continue;float x=gap+i*(bw+gap);p.setColor(CYAN);c.drawRoundRect(x,mid-bh,x+bw,mid,dp(3),dp(3),p);p.setColor(Color.rgb(160,90,255));c.drawRoundRect(x,mid,x+bw,mid+bh,dp(3),dp(3),p);}
+    android.graphics.Path path=new android.graphics.Path();int n=100;for(int i=0;i<n;i++){float x=i*w/(n-1),v=bandAt(i/(float)(n-1));float y=mid-v*h*.43f;if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2.6f));p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setColor(cyan);p.setShadowLayer(dp(9),0,0,blue);c.drawPath(path,p);p.clearShadowLayer();path.reset();for(int i=0;i<n;i++){float x=i*w/(n-1),v=bandAt(i/(float)(n-1));float y=mid+v*h*.34f;if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}p.setColor(purple);p.setStrokeWidth(dp(1.5f));c.drawPath(path,p);p.setStyle(android.graphics.Paint.Style.FILL);
    }else if(mode==3){
-    android.graphics.Path path=new android.graphics.Path();for(int i=0;i<bands.length;i++){float x=i*w/(bands.length-1),y=mid-bands[i]*(h*.42f);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
-    p.setColor(CYAN);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2.5f));c.drawPath(path,p);p.setStyle(android.graphics.Paint.Style.FILL);
+    float gap=dp(3),bw=(w-gap*(count+1))/count;for(int i=0;i<count;i++){float v=bandAt(i/(float)(count-1)),bh=v*h*.78f;if(bh<dp(2))continue;float x=gap+i*(bw+gap),t=mid-bh/2,b=mid+bh/2;p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(1.5f));p.setColor(i%6==0?purple:cyan);p.setShadowLayer(dp(5),0,0,cyan);c.drawRoundRect(x,t,x+bw,b,dp(2),dp(2),p);p.clearShadowLayer();p.setStyle(android.graphics.Paint.Style.FILL);}
+   }else if(mode==4){
+    float cx=w/2,cy=mid,r=Math.min(w,h)*.22f;for(int i=0;i<bands.length;i++){float v=bands[i];if(v<.012f)continue;double a=-Math.PI/2+2*Math.PI*i/bands.length;float outer=r+v*Math.min(w,h)*.32f;float x1=cx+(float)Math.cos(a)*r,y1=cy+(float)Math.sin(a)*r,x2=cx+(float)Math.cos(a)*outer,y2=cy+(float)Math.sin(a)*outer;p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setColor(i%3==0?purple:cyan);p.setShadowLayer(dp(7),0,0,p.getColor());c.drawLine(x1,y1,x2,y2,p);p.clearShadowLayer();}p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(1.5f));p.setColor(blue);c.drawCircle(cx,cy,r,p);p.setStyle(android.graphics.Paint.Style.FILL);
    }else if(mode==5){
-    for(int i=0;i<30;i++){float x=(i*73%Math.max(1,(int)w)),y=(i*47%Math.max(1,(int)h));float r=bands[i%bands.length]*dp(7);if(r<dp(1))continue;p.setColor(i%2==0?CYAN:Color.rgb(165,95,255));c.drawCircle(x,y,r,p);}
+    float gap=dp(4),bw=(w-gap*(count+1))/count;for(int i=0;i<count;i++){float v=bandAt(i/(float)(count-1)),bh=v*h*.68f;if(bh<dp(2))continue;float x=gap+i*(bw+gap),y=mid-bh/2;rect(c,x,y+dp(4),x+bw,y+bh,dp(2),i%5==0?purple:cyan);float d=Math.min(bw,dp(7));p.setColor(pink);p.setShadowLayer(dp(5),0,0,pink);android.graphics.Path diamond=new android.graphics.Path();diamond.moveTo(x+bw/2,y-d);diamond.lineTo(x+bw/2+d,y);diamond.lineTo(x+bw/2,y+d);diamond.lineTo(x+bw/2-d,y);diamond.close();c.drawPath(diamond,p);p.clearShadowLayer();}
    }else if(mode==6){
-    int cols=20,rows=5;float cell=w/cols;for(int x=0;x<cols;x++){float v=bands[x*bands.length/cols];int lit=Math.max(0,Math.round(v*rows));for(int y=0;y<lit;y++){p.setColor(y>3?Color.rgb(170,85,255):CYAN);c.drawRoundRect(x*cell+dp(2),(rows-1-y)*(h/rows)+dp(3),(x+1)*cell-dp(2),(rows-y)*(h/rows)-dp(3),dp(2),dp(2),p);}}
+    int cols=48,rows=9;float cw=w/cols,ch=h/(rows+1);for(int x=0;x<cols;x++){int lit=Math.round(bandAt(x/(float)(cols-1))*rows);for(int y=0;y<lit;y++){float size=Math.min(cw,ch)*.72f,xx=x*cw+(cw-size)/2,yy=mid+(y-(rows-1)/2f)*ch;rect(c,xx,yy,xx+size,yy+size,dp(1),y>6?purple:cyan);}}
    }else{
-    float r=bass*Math.min(w,h)*.42f;if(r>dp(1)){p.setShader(new android.graphics.RadialGradient(w/2,mid,r,new int[]{Color.rgb(150,85,255),CYAN,Color.TRANSPARENT},null,android.graphics.Shader.TileMode.CLAMP));c.drawCircle(w/2,mid,r,p);p.setShader(null);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(CYAN);c.drawCircle(w/2,mid,dp(12)+r*.45f,p);p.setStyle(android.graphics.Paint.Style.FILL);}
+    android.graphics.Path top=new android.graphics.Path(),bottom=new android.graphics.Path();int n=96;for(int i=0;i<n;i++){float x=i*w/(n-1),v=bandAt(i/(float)(n-1));float spread=v*h*.43f;float yt=mid-spread,yb=mid+spread;if(i==0){top.moveTo(x,yt);bottom.moveTo(x,yb);}else{top.lineTo(x,yt);bottom.lineTo(x,yb);}}p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(dp(2.4f));p.setColor(cyan);p.setShadowLayer(dp(8),0,0,blue);c.drawPath(top,p);p.setColor(purple);c.drawPath(bottom,p);p.clearShadowLayer();p.setStyle(android.graphics.Paint.Style.FILL);
    }
   }
  }
