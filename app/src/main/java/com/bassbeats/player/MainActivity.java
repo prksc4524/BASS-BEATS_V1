@@ -320,9 +320,50 @@ public class MainActivity extends Activity {
    int mode=Math.max(0,Math.min(8,selectedVisualizer()));float mid=h*.5f;
    int cyan=Color.rgb(35,205,255),blue=Color.rgb(45,105,255),purple=Color.rgb(175,75,255),pink=Color.rgb(255,65,190);
    int count=48;
-   if(mode==0||mode==8){
+   if(mode==0){
+    // Premium warm spectrum: decorative flowing ribbons are drawn behind the bars.
+    float base=h*.70f;
+    android.graphics.Path flow=new android.graphics.Path();
+    android.graphics.Path flowSoft=new android.graphics.Path();
+    int samples=84;
+    for(int i=0;i<samples;i++){
+     float t=i/(float)(samples-1),x=t*w;
+     float y=h*(.365f+.052f*(float)Math.sin(t*Math.PI*2.0+bass*1.8f)+.018f*(float)Math.sin(t*Math.PI*4.0-bass*2.4f));
+     float y2=y+dp(9)+(float)Math.sin(t*Math.PI*3.0+bass)*dp(2);
+     if(i==0){flow.moveTo(x,y);flowSoft.moveTo(x,y2);}else{flow.lineTo(x,y);flowSoft.lineTo(x,y2);}
+    }
+    int warm=Color.rgb(244,145,48),gold=Color.rgb(255,218,145),cool=Color.rgb(30,190,215);
+    android.graphics.Shader ribbon=new android.graphics.LinearGradient(0,0,w,0,new int[]{warm,gold,cool},new float[]{0f,.49f,1f},android.graphics.Shader.TileMode.CLAMP);
+    p.setShader(ribbon);p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+    p.setStrokeWidth(dp(1.35f));p.setAlpha(92);p.setShadowLayer(dp(5),0,0,Color.rgb(70,155,170));c.drawPath(flow,p);p.clearShadowLayer();
+    p.setStrokeWidth(dp(.8f));p.setAlpha(42);c.drawPath(flowSoft,p);p.setAlpha(255);p.setStyle(android.graphics.Paint.Style.FILL);p.setShader(null);
+    // A few restrained particles follow the flowing ribbon.
+    for(int i=0;i<13;i++){
+     float t=(i+.35f)/13f,x=t*w;
+     float y=h*(.365f+.052f*(float)Math.sin(t*Math.PI*2.0+bass*1.8f)+.018f*(float)Math.sin(t*Math.PI*4.0-bass*2.4f));
+     p.setColor(i<5?warm:(i<8?gold:cool));p.setAlpha(105);c.drawCircle(x,y-dp(8+(i%3)*5),dp(1.1f),p);
+    }
+    p.setAlpha(255);
+    float gap=dp(3),bw=(w-gap*(count+1))/count;
+    android.graphics.Shader barGradient=new android.graphics.LinearGradient(0,0,w,0,new int[]{Color.rgb(239,126,34),warm,gold,Color.rgb(115,205,190),cool},new float[]{0f,.24f,.49f,.73f,1f},android.graphics.Shader.TileMode.CLAMP);
+    android.graphics.Shader reflectionGradient=new android.graphics.LinearGradient(0,base,0,base+dp(40),new int[]{Color.argb(62,244,145,48),Color.argb(34,255,218,145),Color.argb(0,30,190,215)},null,android.graphics.Shader.TileMode.CLAMP);
+    for(int i=0;i<count;i++){
+     float v=bandAt(i/(float)(count-1)),bh=v*h*.56f;
+     if(bh<dp(1))continue;
+     float x=gap+i*(bw+gap),top=base-bh;
+     p.setShader(barGradient);p.setStyle(android.graphics.Paint.Style.FILL);
+     p.setShadowLayer(dp(5),0,0,i<count/3?warm:(i>count*2/3?cool:gold));
+     c.drawRoundRect(x,top,x+bw,base,dp(3.5f),dp(3.5f),p);p.clearShadowLayer();
+     p.setShader(reflectionGradient);p.setAlpha(255);
+     float reflect=Math.min(dp(40),Math.max(dp(7),bh*.30f));
+     c.drawRoundRect(x,base+dp(2),x+bw,base+dp(2)+reflect,dp(2),dp(2),p);
+    }
+    p.setShader(barGradient);p.setAlpha(90);p.setStrokeWidth(dp(1));c.drawLine(0,base,w,base,p);
+    p.setAlpha(255);p.setShader(null);
+   }else if(mode==8){
     float gap=dp(mode==0?3:2),bw=(w-gap*(count+1))/count;
     for(int i=0;i<count;i++){float v=bandAt(i/(float)(count-1));float bh=v*h*(mode==0?.82f:.76f);if(bh<dp(1))continue;float x=gap+i*(bw+gap);int top=Color.rgb(55,190,255);int bottom=i%5==0?purple:blue;p.setShader(new android.graphics.LinearGradient(0,mid-bh/2,0,mid+bh/2,top,bottom,android.graphics.Shader.TileMode.CLAMP));p.setStyle(android.graphics.Paint.Style.FILL);p.setShadowLayer(dp(8),0,0,i%5==0?purple:cyan);c.drawRoundRect(x,mid-bh/2,x+bw,mid+bh/2,dp(mode==8?5:2),dp(mode==8?5:2),p);p.clearShadowLayer();}p.setShader(null);
+   
    }else if(mode==1){
     int cols=52,rows=7;float cw=w/cols,ch=h/(rows+1);float radius=Math.min(cw,ch)*.34f;
     for(int x=0;x<cols;x++){float v=bandAt(x/(float)(cols-1));int lit=Math.round(v*rows);for(int y=0;y<lit;y++){float xx=x*cw+cw/2,yy=mid+(y-(rows-1)/2f)*ch;int col=y>4?purple:(x%4==0?pink:cyan);p.setColor(col);p.setShadowLayer(dp(5),0,0,col);c.drawCircle(xx,yy,radius,p);p.clearShadowLayer();}}
